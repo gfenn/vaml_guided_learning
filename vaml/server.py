@@ -88,14 +88,17 @@ class VamlHandler(BaseHTTPRequestHandler):
             return f.read()
 
     def _find_file(self, filename):
+        converter = None
         if filename.endswith('.js'):
             content_type = 'text/javascript'
         elif filename.endswith('.html'):
             content_type = 'text/html'
+        elif filename.endswith('.ico') or filename.endswith('.png'):
+            content_type = 'image/png'
         else:
             raise Exception("Invalid file type: {}".format(filename))
         content = self._read(filename)
-        return content, content_type
+        return content, content_type, converter
 
     def _send_simple(self, status_code, content_type='', content=''):
         self.send_response(status_code)
