@@ -146,6 +146,7 @@ class VamlHandler(BaseHTTPRequestHandler):
             '.js': ('text/javascript', bytes_utf8_converter, utf8_reader),
             '.json': ('application/json', bytes_utf8_converter, utf8_reader),
             '.html': ('text/html', bytes_utf8_converter, utf8_reader),
+            '.css': ('text/css', bytes_utf8_converter, utf8_reader),
             '.ico': ('image/png', None, None),
             '.png': ('image/png', None, None),
         }
