@@ -2,43 +2,95 @@ import json
 import os
 from io import StringIO
 
-def jsonize_raw_results(filename):
-    # Build the metadata object
-    metadata = {'steps': 0, 'reward': 0}
 
-    # Build the list of step data
-    step_list = []
-    with open(filename, 'r') as fh:
-        for line in fh:
-            step_json = json.load(StringIO(line.strip()))
-            step_list.append(step_json)
-            metadata['steps'] += 1
-            metadata['reward'] += step_json['reward']
-
-    datas = json.dumps(
-        obj={'metadata': metadata, 'steps': step_list},
+def _to_json(obj):
+    return json.dumps(
+        obj=obj,
         sort_keys=True,
         indent=2
     )
-    return datas
+
+
+class EpisodeConverter:
+    def __init__(self):
+        self._reset()
+
+    def _reset(self):
+        self.step_list = list()
+        self.metadata = {'steps': 0, 'reward': 0, 'episode': 0, 'run': 0}
+
+    def convert(self, filename, run, episode, save_folder):
+        self.load(filename, run, episode)
+        self.save(save_folder)
+
+    def load(self, filename, run, episode):
+        # Reset the data
+        self._reset()
+        self.metadata['run'] = run
+        self.metadata['episode'] = episode
+
+        # Open the file and read all steps
+        with open(filename, 'r') as fh:
+            for line in fh:
+                step_json = json.load(StringIO(line.strip()))
+                self.step_list.append(step_json)
+                self.metadata['steps'] += 1
+                self.metadata['reward'] += step_json['reward']
+
+    def save(self, save_folder):
+        # Save data
+        steps_filename = '{base}/episode_{ep}.json'.format(base=save_folder, ep=self.metadata['episode'])
+        with open(steps_filename, 'w') as fh:
+            json_obj = {
+                'metadata': self.metadata,
+                'steps': self.step_list
+            }
+            fh.write(_to_json(json_obj))
+
 
 ROOT_FOLDER = '../data'
 OLD_FOLDER = ROOT_FOLDER + '/old'
 CONVERTED_FOLDER = ROOT_FOLDER + '/converted'
 
-if __name__ == '__main__':
-    # Iterate all files
-    for file in os.listdir(OLD_FOLDER):
-        old_filename = '{base}/{file}'.format(
-            base=OLD_FOLDER,
-            file=file
-        )
-        result = jsonize_raw_results(old_filename)
 
-        converted_filename = '{base}/{file}.json'.format(
-            base=CONVERTED_FOLDER,
-            file=os.path.splitext(file)[0]
+def convert_run(converter: EpisodeConverter, input_folder, run_number, output_folder):
+    # Statistics
+    metadata = {'total_steps': 0, 'total_reward': 0, 'episodes': 0}
+
+    # Create the folder
+    save_run_folder = '{base}/run_{run}'.format(base=output_folder, run=run_number)
+    if not os.path.exists(save_run_folder):
+        os.mkdir(save_run_folder)
+
+    # Convert all episodes
+    for file in os.listdir(input_folder):
+        metadata['episodes'] += 1
+        converter.convert(
+            filename='{folder}/{file}'.format(folder=input_folder, file=file),
+            run=run_number,
+            episode=metadata['episodes'],
+            save_folder=save_run_folder
         )
-        with open(converted_filename, 'w') as fh:
-            fh.write(result)
-    pass
+        metadata['total_steps'] += converter.metadata['steps']
+        metadata['total_reward'] += converter.metadata['reward']
+
+    # Save the run metadata
+    run_metadata_filename = '{folder}/metadata.json'.format(folder=save_run_folder)
+    with open(run_metadata_filename, 'w') as fh:
+        fh.write(_to_json(metadata))
+
+
+def convert_all(old_folder, new_folder):
+    if not os.path.exists(new_folder):
+        os.mkdir(new_folder)
+    run_number = 0
+    converter = EpisodeConverter()
+    for folder in os.listdir(old_folder):
+        run_number += 1
+        folder_path = '{base}/{folder}'.format(base=old_folder, folder=folder)
+        if os.path.isdir(folder_path):
+            convert_run(converter, folder_path, run_number, new_folder)
+
+
+if __name__ == '__main__':
+    convert_all(OLD_FOLDER, CONVERTED_FOLDER)
