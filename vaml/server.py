@@ -46,10 +46,11 @@ class VamlServer:
 
 
 async def websocket_handler(websocket, path):
-    while True:
-        now = datetime.datetime.utcnow().isoformat() + 'Z'
-        await websocket.send(now)
-        await asyncio.sleep(random.random() * 3)
+    await websocket.send("Howdy do!")
+    # while True:
+    #     now = datetime.datetime.utcnow().isoformat() + 'Z'
+    #     await websocket.send(now)
+    #     await asyncio.sleep(random.random() * 3)
 
 
 # Nested class for request processing
@@ -60,29 +61,47 @@ class VamlHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        paths = {
-            '/foo': {'status': 200},
-            '/bar': {'status': 302},
-            '/baz': {'status': 404},
-            '/qux': {'status': 500}
-        }
+        # Root request?
+        if self.path == '/' or self.path == '/index.html':
+            content, content_type = self._find_file('index.html')
+            self._send_simple(
+                status_code=200,
+                content_type=content_type,
+                content=content.replace("${WEBSOCKET_PORT}", str(SERVER.websocket_port))
+            )
+            return
 
-        if self.path in paths:
-            self.respond(paths[self.path])
+        # Try to find the file
+        try:
+            content, content_type = self._find_file(self.path)
+            self._send_simple(
+                status_code=200,
+                content_type=content_type,
+                content=content
+            )
+        except Exception as e:
+            print(e)
+            self._send_simple(status_code=500)
+
+    def _read(self, filename):
+        with open('www/{}'.format(filename)) as f:
+            return f.read()
+
+    def _find_file(self, filename):
+        if filename.endswith('.js'):
+            content_type = 'text/javascript'
+        elif filename.endswith('.html'):
+            content_type = 'text/html'
         else:
-            self.respond({'status': 500})
+            raise Exception("Invalid file type: {}".format(filename))
+        content = self._read(filename)
+        return content, content_type
 
-    def handle_http(self, status_code, path):
+    def _send_simple(self, status_code, content_type='', content=''):
         self.send_response(status_code)
-        self.send_header('Content-type', 'text/html')
+        self.send_header('Content-type', content_type)
         self.end_headers()
+        data = bytes(content, 'UTF-8')
+        self.wfile.write(data)
 
-        with open('www/page.html') as f:
-            content = f.read()
-        content = content.replace("${WEBSOCKET_PORT}", str(SERVER.websocket_port))
-        return bytes(content, 'UTF-8')
-
-    def respond(self, opts):
-        response = self.handle_http(opts['status'], self.path)
-        self.wfile.write(response)
 
