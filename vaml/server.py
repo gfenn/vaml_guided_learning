@@ -95,7 +95,7 @@ class VamlHandler(BaseHTTPRequestHandler):
 
     def _get_run_metadata(self, parameters):
         self._forward_file(
-            filename='data/converted/run_{id}/metadata.json'.format(
+            filename='../thesis_data/blocks/run_{id}/metadata.json'.format(
                 id=parameters['id']
             ),
             root=''
@@ -103,7 +103,7 @@ class VamlHandler(BaseHTTPRequestHandler):
 
     def _get_episode_data(self, parameters):
         self._forward_file(
-            filename='data/converted/run_{run}/episode_{episode}.json'.format(
+            filename='../thesis_data/blocks/run_{run}/episode_{episode}.json'.format(
                 run=parameters['run_id'],
                 episode=parameters['id']
             ),
