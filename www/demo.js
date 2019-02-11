@@ -1,69 +1,63 @@
-run_api = 'data/run?id=1'
-episode_api ='data/episode?run_id=1&id=1'
-episode_api_tmp ='data/episode?run_id=1&id='
 
-REDUCTION_FREQUENCY = 1000
+DATA_COMPRESSION = 1000
 EWMA_BETA = 0.01
+RUNS_PER_GROUP = 3
+
+GROUP_COLORS = {
+    'blocks': 'red',
+    'nodsf': 'lightgreen'
+}
+
+FORMAL_NAME = {
+    'blocks': 'Depth Splitting',
+    'nodsf': 'No Depth Splitting'
+}
 
 document.addEventListener("DOMContentLoaded", function(event) {
-    all_runs = []
-    for (run = 1; run <= 3; run++) {
-        all_runs.push(
-            getRunData(run)
-                .then(function(data) { return reduceDataCount(data, REDUCTION_FREQUENCY) })
-                .then(function(data) { return applyEwma(data, EWMA_BETA) })
-        )
-    }
-    Promise.all(all_runs)
-        .then(function(data) { drawChart(data, REDUCTION_FREQUENCY); })
+    getAllGroups(['blocks', 'nodsf'], DATA_COMPRESSION)
+        .then(function(group_list) {
+            return group_list.map(function (group) {
+                group['color'] = GROUP_COLORS[group['group']]
+                group['value'] = applyEwma(group['steps'], EWMA_BETA)
+                group['formal_name'] = FORMAL_NAME[group['group']]
+                return group
+            })
+        })
+        .then(function(group_list) {
+            drawChart(group_list, DATA_COMPRESSION)
+        })
 });
 
-function getRunData(run) {
-    return fetch('data/run?id=' + run)
+function getRunData(group, run, compression) {
+    return fetch('data/runsteps?group=' + group + '&run=' + run + '&compression=' + compression)
         .then(function(response) { return response.json(); })
-        .then(function(metadata) {
-            // Collect all episodes
-            promises_list = []
-            for (episode = 1; episode <= metadata['episodes']; episode++) {
-//            for (episode = 1; episode <= 100; episode++) {
-                promises_list.push(getEpisodeData(run, episode))
-            }
-            return Promise.all(promises_list)
-        })
-        .then(function(data) { return data.flat() })
-}
-
-function getEpisodeData(run, episode) {
-    return fetch('data/episode?run_id=' + run + '&id=' + episode)
-        .then(function(response) { return response.json(); })
-        .then(function(data) { return data.steps })
         .then(function(steps) {
-            rewards = []
-            steps.forEach(function(step) {
-                rewards.push(step['reward'])
-            })
-            return rewards
+            return {
+                steps: steps,
+                group: group,
+                run: run,
+                compression: compression
+            }
         })
 }
 
-function reduceDataCount(data, frequency) {
-    reduced = []
-    blockMean = 0
-    blockCount = 0
-    for (i = 0; i < data.length; i++) {
-        blockMean += data[i]
-        blockCount += 1
-        if (blockCount >= frequency) {
-            reduced.push(blockMean / blockCount)
-            blockMean = 0
-            blockCount = 0
+function getAllRuns(group, compression) {
+    promises = []
+    for (run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
+        promises.push(getRunData(group, run_id, compression))
+    }
+    return Promise.all(promises)
+}
+
+function getAllGroups(groups, compression) {
+    promises = []
+    for (idx = 0; idx < groups.length; idx ++) {
+        group = groups[idx]
+        for (run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
+            promises.push(getRunData(group, run_id, compression))
         }
     }
-    // Add on remaining data if at least half a bucket
-    if (blockCount >= frequency * 0.5) {
-        reduced.push(blockMean / blockCount)
-    }
-    return reduced
+    return Promise.all(promises)
 }
 
 function applyEwma(data, beta) {
@@ -76,7 +70,7 @@ function applyEwma(data, beta) {
 }
 
 
-function drawChart(all_runs, reduction_frequency) {
+function drawChart(group_list, reduction_frequency) {
     // Set up shape of SVG
     var svgWidth = 610, svgHeight = 400;
     var margin = { top: 20, right: 30, bottom: 50, left: 50 };
@@ -95,7 +89,7 @@ function drawChart(all_runs, reduction_frequency) {
     var y = d3.scaleLinear().rangeRound([height, 0]);
 
     // Set up the Y axis
-    y_domain = d3.extent(all_runs.flat())
+    y_domain = d3.extent(group_list.map(function(group) { return group['value'] }).flat())
     y.domain(y_domain);
     g.append("g")
         .call(d3.axisLeft(y))
@@ -109,7 +103,8 @@ function drawChart(all_runs, reduction_frequency) {
         .text("Step Reward");
 
     // Set up the X axis
-    x_domain = [1, d3.extent(all_runs.map(function(run) { return run.length; }))[1] * 1000]
+    group_step_counts = group_list.map(function(group) { return group['value'].length; })
+    x_domain = [1, d3.extent(group_step_counts)[1] * reduction_frequency]
     x.domain(x_domain);
     g.append("g")
         .attr("transform", "translate(0," + height + ")")
@@ -120,7 +115,7 @@ function drawChart(all_runs, reduction_frequency) {
         .attr('x', width / 2)
         .attr("y", 36)
         .attr("text-anchor", "middle")
-        .text("Step");
+        .text("Training Step");
 
     // Establish the line rules
     var line = d3.line()
@@ -131,16 +126,53 @@ function drawChart(all_runs, reduction_frequency) {
             return y(d)
         })
 
-    // Iterate each run
-    all_runs.forEach(function (run_data) {
+    // Iterate each group
+    group_list.forEach(function (group) {
         g.append("path")
-            .datum(run_data)
+            .datum(group['value'])
             .attr("fill", "none")
-            .attr("stroke", "green")
+            .attr("stroke", group['color'])
             .attr("stroke-linejoin", "round")
             .attr("stroke-linecap", "round")
             .attr("stroke-width", 1.5)
             .attr("d", line);
+    })
+
+    // Build the legend
+    legend_size = { width: 80, height: 30}
+    legend = svg.append('g')
+        .attr("transform", "translate(" + (svgWidth - legend_size.width - margin.right)
+            + "," + (svgHeight - legend_size.height - margin.bottom - 10) + ")")
+
+    // Items within the legend
+    known_groups = {}
+    known_counter = 0
+    group_list.forEach(function (group) {
+        // See if this group has been added to the legend yet
+        group_name = group['group']
+        if (known_groups[group_name] == null) {
+            known_groups[group_name] = true
+            known_counter ++
+
+            // Add the line w/ color
+            y_base = 16 * (known_counter-1)
+            legend.append('line')
+                .attr('stroke', group['color'])
+                .attr('stroke-width', '3px')
+                .attr('x1', 0)
+                .attr('x2', 16)
+                .attr('y1', y_base-4)
+                .attr('y2', y_base-4)
+
+            // Add the name to the legend
+            legend.append('text')
+                .attr("fill", "#000")
+                .attr('font-size', '12px')
+                .attr('x', 20)
+                .attr("y", y_base)
+                .attr("text-anchor", "left")
+                .text(group['formal_name']);
+        }
     })
 }
 

@@ -1,11 +1,16 @@
 import asyncio
 import time
 
+import json
+from io import StringIO
+
 import os
 import threading
 import websockets
 from http.server import HTTPServer
 from http.server import BaseHTTPRequestHandler
+
+from vaml.data_utils import load_run_steps, compress_steps
 
 SERVER = None
 
@@ -101,6 +106,25 @@ class VamlHandler(BaseHTTPRequestHandler):
             root=''
         )
 
+    def _get_runsteps(self, parameters):
+        # Load the data
+        data = load_run_steps(
+            root_folder='../thesis_data/{group}'.format(group=parameters['group']),
+            run_id=parameters['run']
+        )
+
+        # Compress?
+        compression = int(parameters['compression'])
+        if compression > 1:
+            data = compress_steps(data, compression)
+
+        # Send the data
+        self._send_simple(
+            content_type='application/json',
+            content=json.dumps(data),
+            converter=bytes_utf8_converter
+        )
+
     def _get_episode_data(self, parameters):
         self._forward_file(
             filename='../thesis_data/blocks/run_{run}/episode_{episode}.json'.format(
@@ -119,6 +143,7 @@ class VamlHandler(BaseHTTPRequestHandler):
             '/': self._get_index,
             '/index.html': self._get_index,
             '/data/run': self._get_run_metadata,
+            '/data/runsteps': self._get_runsteps,
             '/data/episode': self._get_episode_data
         }
 
