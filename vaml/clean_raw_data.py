@@ -33,7 +33,11 @@ class EpisodeConverter:
         with open(filename, 'r') as fh:
             for line in fh:
                 step_json = json.load(StringIO(line.strip()))
-                self.step_list.append(step_json)
+                step_keep = {
+                    'step': self.metadata['steps'] + 1,
+                    'reward': step_json['reward']
+                }
+                self.step_list.append(step_keep)
                 self.metadata['steps'] += 1
                 self.metadata['reward'] += step_json['reward']
 
@@ -63,7 +67,10 @@ def convert_run(converter: EpisodeConverter, input_folder, run_number, output_fo
         os.mkdir(save_run_folder)
 
     # Convert all episodes
-    for file in os.listdir(input_folder):
+    all_files = os.listdir(input_folder)
+    all_files.sort()
+    print(all_files)
+    for file in all_files:
         metadata['episodes'] += 1
         converter.convert(
             filename='{folder}/{file}'.format(folder=input_folder, file=file),
@@ -83,14 +90,15 @@ def convert_run(converter: EpisodeConverter, input_folder, run_number, output_fo
 def convert_all(old_folder, new_folder):
     if not os.path.exists(new_folder):
         os.mkdir(new_folder)
-    run_number = 0
     converter = EpisodeConverter()
     for folder in os.listdir(old_folder):
-        run_number += 1
+        tokens = folder.split('_')
+        run_number = int(tokens[1])
         folder_path = '{base}/{folder}'.format(base=old_folder, folder=folder)
         if os.path.isdir(folder_path):
             convert_run(converter, folder_path, run_number, new_folder)
 
 
 if __name__ == '__main__':
+    print("Converting data.")
     convert_all(OLD_FOLDER, CONVERTED_FOLDER)
