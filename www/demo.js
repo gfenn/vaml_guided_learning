@@ -1,20 +1,20 @@
 
 DATA_COMPRESSION = 1000
 EWMA_BETA = 0.01
-RUNS_PER_GROUP = 3
+RUNS_PER_GROUP = 1
 
 GROUP_COLORS = {
-    'blocks': 'red',
-    'nodsf': 'lightgreen'
+    'final': 'red',
+    'deeplab': 'lightgreen'
 }
 
 FORMAL_NAME = {
-    'blocks': 'Depth Splitting',
-    'nodsf': 'No Depth Splitting'
+    'final': 'Extra Training',
+    'deeplab': 'Deeplab'
 }
 
 document.addEventListener("DOMContentLoaded", function(event) {
-    getAllGroups(['blocks', 'nodsf'], DATA_COMPRESSION)
+    getAllGroups(['final'], DATA_COMPRESSION)
         .then(function(group_list) {
             return group_list.map(function (group) {
                 group['color'] = GROUP_COLORS[group['group']]

@@ -1,4 +1,28 @@
 import json
+import os
+import numpy
+
+def load_group_metrics(root_folder, compression):
+    # Iterate files
+    group = []
+    for file in os.listdir(root_folder):
+        tokens = file.split('_')
+        try:
+            data = load_run_steps(root_folder, int(tokens[1]))
+            group.append(compress_steps(data, compression))
+        except:
+            pass
+
+
+def calculate_step_metrics(group, step):
+    percentiles = {
+        "p100": group[0][step],
+        "p75": group[0][step],
+        "p50": group[0][step],
+        "p25": group[0][step],
+        "p0": group[0][step]
+    }
+    percentiles.p75 = 9
 
 
 def load_run_steps(root_folder, run_id):

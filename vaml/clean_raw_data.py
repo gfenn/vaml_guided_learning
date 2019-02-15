@@ -48,7 +48,7 @@ class EpisodeConverter:
             fh.write(_to_json(json_obj))
 
 
-ROOT_FOLDER = '../data'
+ROOT_FOLDER = '../../data'
 OLD_FOLDER = ROOT_FOLDER + '/old'
 CONVERTED_FOLDER = ROOT_FOLDER + '/converted'
 
