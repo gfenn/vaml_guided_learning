@@ -1,24 +1,26 @@
 
 DATA_COMPRESSION = 1000
 EWMA_BETA = 0.01
-RUNS_PER_GROUP = 1
+RUNS_PER_GROUP = 3
 
 GROUP_COLORS = {
-    'final': 'red',
+    'blocks': 'red',
     'deeplab': 'lightgreen'
 }
 
 FORMAL_NAME = {
-    'final': 'Extra Training',
+    'blocks': 'Blocks',
     'deeplab': 'Deeplab'
 }
 
 document.addEventListener("DOMContentLoaded", function(event) {
-    getAllGroups(['final'], DATA_COMPRESSION)
+    promises = []
+    getAllGroupsField(['blocks', 'deeplab'], DATA_COMPRESSION, 'rewards', promises)
+    Promise.all(promises)
         .then(function(group_list) {
             return group_list.map(function (group) {
                 group['color'] = GROUP_COLORS[group['group']]
-                group['value'] = applyEwma(group['steps'], EWMA_BETA)
+                group['value'] = applyEwma(group['value'], EWMA_BETA)
                 group['formal_name'] = FORMAL_NAME[group['group']]
                 return group
             })
@@ -28,36 +30,33 @@ document.addEventListener("DOMContentLoaded", function(event) {
         })
 });
 
-function getRunData(group, run, compression) {
-    return fetch('data/runsteps?group=' + group + '&run=' + run + '&compression=' + compression)
+function getRunField(group, run, compression, field) {
+    return fetch('data/run_field?group=' + group + '&run=' + run + '&compression=' + compression + '&field=' + field)
         .then(function(response) { return response.json(); })
-        .then(function(steps) {
+        .then(function(values) {
             return {
-                steps: steps,
                 group: group,
                 run: run,
-                compression: compression
+                compression: compression,
+                field: field,
+                value: values
             }
         })
 }
 
-function getAllRuns(group, compression) {
-    promises = []
+function getAllRunFields(group, run_id, compression, field, promises) {
     for (run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
-        promises.push(getRunData(group, run_id, compression))
+        promises.push(getRunField(group, run_id, compression, field))
     }
-    return Promise.all(promises)
 }
 
-function getAllGroups(groups, compression) {
-    promises = []
+function getAllGroupsField(groups, compression, field, promises) {
     for (idx = 0; idx < groups.length; idx ++) {
         group = groups[idx]
         for (run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
-            promises.push(getRunData(group, run_id, compression))
+            promises.push(getRunField(group, run_id, compression, field))
         }
     }
-    return Promise.all(promises)
 }
 
 function applyEwma(data, beta) {
