@@ -2,32 +2,24 @@ import json
 import os
 import numpy as np
 
-def load_group_metrics(root_folder, compression):
-    # Iterate files
-    group = []
-    for file in os.listdir(root_folder):
-        tokens = file.split('_')
-        try:
-            data = load_run_steps(root_folder, int(tokens[1]))
-            group.append(compress_steps(data, compression))
-        except:
-            pass
 
-
-def calculate_step_metrics(group, step):
-    percentiles = {
-        "p100": group[0][step],
-        "p75": group[0][step],
-        "p50": group[0][step],
-        "p25": group[0][step],
-        "p0": group[0][step]
+def load_group_metrics(group_folder, compression):
+    data = load_all_runs_field_numpy(group_folder, 'rewards', compression)
+    return {
+        'p75': _calculate_percentile(data, 75),
+        'p50': _calculate_percentile(data, 50),
+        'p25': _calculate_percentile(data, 25),
     }
-    percentiles.p75 = 9
 
 
-def load_run_field(root_folder, run_id, field, compression):
+def _calculate_percentile(data, percentile):
+    p = np.percentile(data, percentile, axis=0)
+    return list(p)
+
+
+def load_run_field(group_folder, run_id, field, compression):
     # Read files
-    reward_data = load_all_episodes_field_numpy(root_folder, run_id, field)
+    reward_data = load_all_episodes_field_numpy(group_folder, run_id, field)
     compressed = compress_array(reward_data, compression)
     return compressed.tolist()
 
@@ -58,9 +50,9 @@ def iterate_episodes(run_metadata):
 
 #################### DIRECT LOADING OF FILES ####################
 
-def load_run_field_json(root_folder, run_id, field):
+def load_run_field_json(group_folder, run_id, field):
     filename = '{base}/run_{run}/run_{run}_{field}.json'.format(
-        base=root_folder,
+        base=group_folder,
         run=run_id,
         field=field
     )
@@ -68,26 +60,54 @@ def load_run_field_json(root_folder, run_id, field):
         return json.load(fh)
 
 
-def load_episode_field_numpy(root_folder, run_id, episode_id, field):
+def load_all_runs_field_numpy(group_folder, field, compression):
+    run_folders = os.listdir(group_folder)
+    run_ids = list()
+    for folder in run_folders:
+        run_tokens = folder.split('_')
+        if len(run_tokens) == 2:
+            run_ids.append(int(run_tokens[1]))
+    run_ids.sort()
+
+    # Load all data
+    data = list()
+    shortest_length = 99999999
+    for run_id in run_ids:
+        item = load_all_episodes_field_numpy(group_folder, run_id, field)
+        item = compress_array(item, compression)
+        data.append(item)
+        shortest_length = min(shortest_length, item.size)
+
+    # Trim each item as needed
+    for idx in range(0, len(data)):
+        data[idx] = np.reshape(data[idx][0:shortest_length], (1, shortest_length))
+
+    # Convert into a volume of data
+    combined = np.concatenate(data, axis=0)
+    return combined
+
+
+
+def load_episode_field_numpy(group_folder, run_id, episode_id, field):
     return np.load('{base}/run_{run}/episode_{ep}_{field}.npy'.format(
-        base=root_folder,
+        base=group_folder,
         run=run_id,
         ep=episode_id,
         field=field
     ))
 
 
-def load_all_episodes_field_numpy(root_folder, run_id, field):
+def load_all_episodes_field_numpy(group_folder, run_id, field):
     return np.load('{base}/run_{run}/run_{run}_{field}.npy'.format(
-        base=root_folder,
+        base=group_folder,
         run=run_id,
         field=field
     ))
 
 
-def load_episode_field_json(root_folder, run_id, episode_id, field):
+def load_episode_field_json(group_folder, run_id, episode_id, field):
     filename = '{base}/run_{run}/episode_{ep}_{field}.json'.format(
-        base=root_folder,
+        base=group_folder,
         run=run_id,
         ep=episode_id,
         field=field
