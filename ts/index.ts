@@ -13,90 +13,218 @@ let FORMAL_NAME: {[key: string]: string} = {
     'deeplab': 'Deeplab'
 }
 
-// class Rectangle {
-//   left: number;
-//   right: number;
-//   top: number;
-//   bottom: number;
-//   constructor(left: number, top: number, right: number, bottom: number) {
-//     this.left = left;
-//     this.right = right;
-//     this.top = top;
-//     this.bottom = bottom;
-//   }
-//
-//   width() {
-//     return this.right - this.left;
-//   }
-//
-//   height() {
-//     return this.top - this.bottom;
-//   }
-//
-// }
+class Rectangle {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  constructor(left: number, top: number, right: number, bottom: number) {
+    this.left = left;
+    this.right = right;
+    this.top = top;
+    this.bottom = bottom;
+  }
+  width() {
+    return this.right - this.left;
+  }
+
+  height() {
+    return this.top - this.bottom;
+  }
+
+}
+
+
+class Size {
+  width: number
+  height: number
+  constructor(width: number, height: number) {
+    this.width = width;
+    this.height = height
+  }
+}
+
+
+
+class LineGraphAxis {
+  protected _chartSize: Size = new Size(2, 2)
+  protected _dataRange: number[] = [1, 2]
+  protected _multiplier: number = 1
+  protected _domain: any
+  protected _gParent: any
+  protected _gAxis: any
+  protected _gText: any
+
+  constructor(gParent: any) {
+    this._gParent = gParent
+    this._gAxis = gParent.append("g")
+      .attr('class', 'axis')
+    this._buildAxisText()
+
+  }
+  set chartSize(size: Size) {
+    this._chartSize = size
+    this._rebuildDomain()
+  }
+  get chartSize() { return this._chartSize }
+
+  set multiplier(multiplier: number) {
+    let delta = multiplier / this._multiplier
+    this._multiplier = multiplier
+    this._dataRange = [
+      this._dataRange[0] * delta,
+      this._dataRange[1] * delta
+    ]
+    this._rebuildDomain()
+  }
+  get multiplier() { return this._multiplier }
+
+  get domain() {
+    return this._domain
+  }
+
+  protected _buildAxisText() {
+    // Implemented by child
+  }
+  protected _axisPixelRange(): number[] {
+    // Implemented by child
+    return [1, 2]
+  }
+
+  protected _rebuildDomain() {
+    this._domain = d3.scaleLinear().rangeRound(this._axisPixelRange());
+    this._domain.domain(this._dataRange)
+  }
+
+  setDataRange(low: number, high: number) {
+    this._dataRange = [low * this._multiplier, high * this._multiplier]
+    this._rebuildDomain()
+  }
+  setDataRangeFromData(data: number[]) {
+    let range = d3.extent(data)
+    this.setDataRange(range[0], range[1])
+  }
+  setDataRangeFromDataDeep(data: number[][]) {
+    let dataFlat = ([] as number[]).concat(...data)
+    let range = d3.extent(dataFlat)
+    this.setDataRange(range[0], range[1])
+  }
+  setDataRangeFromLength(data: number[]) {
+    this.setDataRange(1, data.length)
+  }
+  setDataRangeFromLengthDeep(data: number[][]) {
+    let lengths = data.map(function (subdata: number[]) {
+      return subdata.length
+    })
+    this.setDataRange(1, d3.extent(lengths)[1])
+  }
+}
+
+class YAxis extends LineGraphAxis {
+
+  protected _axisPixelRange(): number[] {
+    return [this._chartSize.height, 0]
+  }
+
+  protected _buildAxisText() {
+    this._gText = this._gAxis.append("text")
+      .attr("fill", "#000")
+      .attr('font-size', '14px')
+      .attr("transform", "rotate(-90)")
+      .attr("x", -this._chartSize.height/2)
+      .attr('y', -35)
+      .attr("text-anchor", "middle")
+      .text("Step Reward");
+  }
+
+  protected _rebuildDomain() {
+    super._rebuildDomain()
+    this._gAxis.call(d3.axisLeft(this._domain))
+    this._gText.attr("x", -this._chartSize.height/2)
+      .attr('y', -35)
+  }
+}
+
+class XAxis extends LineGraphAxis {
+
+  protected _axisPixelRange(): number[] {
+    return [0, this._chartSize.width]
+  }
+
+    protected _buildAxisText() {
+      this._gText = this._gAxis.append("text")
+        .attr("fill", "#000")
+        .attr('font-size', '14px')
+        .attr('x', this._chartSize.width/2)
+        .attr("y", 36)
+        .attr("text-anchor", "middle")
+        .text("Training Step");
+    }
+
+    protected _rebuildDomain() {
+      super._rebuildDomain()
+      this._gAxis.call(d3.axisBottom(this._domain).ticks(4))
+        .attr("transform", "translate(0," + this._chartSize.height + ")")
+      this._gText.attr('x', this._chartSize.width/2)
+        .attr("y", 36)
+    }
+}
+
 
 class LineGraph {
 
   // Group that this line graph belongs to
-  g: any;
-  width: 600;
-  height: 400;
+  private _g: any;
+  private _margin: Rectangle = new Rectangle(50, 50, 50, 50)
+  private _size: Size = new Size(530, 330)
 
   // Data points are compressed, so we need to expand them back
   // out when determining the domain
   xCompression: number = 1000
 
-  // Domains
-  xDomain: any
-  yDomain: any
-  lineRules: any = d3.line()
-      .x(function(_: any, idx: number) {
-          return this.xDomain(this.xCompression * idx + 1)
-      })
-      .y(function(d: any, _: number) {
-          return this.yDomain(d)
-      })
+  // Axes
+  protected _yAxis: YAxis
+  protected _xAxis: XAxis
+
+  // Lines
+  protected _gLines: any
+  protected _lines: any[] = []
 
   constructor(g: any) {
-    this.g = g
-    this.setXdomain(1, 10)
-    this.setYdomain(1, 10)
+    this._g = g
+    this._gLines = g.append('g')
+      .attr('class', 'lines')
+    this._yAxis = new YAxis(g)
+    this._xAxis = new XAxis(g)
+    this._updateChartSize()
+    this._updateAxes()
   }
 
-  setXdomain(low: number, high: number) {
-      this.xDomain = d3.scaleLinear().rangeRound([0, this.width]);
-      this.xDomain.domain([low, high])
+  get yAxis() { return this._yAxis }
+  get xAxis() { return this._xAxis }
+
+  set size(size: Size) {
+    this._size = size
+    this._updateAxes()
   }
-  setXdomainAuto(data: number[]) {
-    let range = d3.extent(data)
-    this.setXdomain(range[0], range[1])
+  get size() { return this._size }
+
+  set margins(margins: Rectangle) {
+    this._margin = margins
+    this._updateChartSize
   }
-  setXdomainFromLength(data: number[]) {
-    this.setXdomain(1, data.length * this.xCompression)
-  }
-  setXdomainFromLengthDeep(data: number[][]) {
-    let lengths = data.map(function (subdata: number[]) {
-      return subdata.length
-    })
-    this.setXdomain(1, d3.extent(lengths)[1] * this.xCompression)
+  get margins() { return this._margin }
+
+  private _updateChartSize() {
+    this._g.attr("transform",
+        "translate(" + this._margin.left + "," + this._margin.top + ")"
+    );
   }
 
-  setYdomain(low: number, high: number) {
-    this.yDomain = d3.scaleLinear().rangeRound([this.height, 0]);
-    this.yDomain.domain([-0.5, +0.8])
+  private _updateAxes() {
+    this._yAxis.chartSize = this._size
+    this._xAxis.chartSize = this._size
   }
-  setYdomainAuto(data: number[]) {
-    let range = d3.extent(data)
-    this.setYdomain(range[0], range[1])
-  }
-  setYdomainAutoDeep(data: number[][]) {
-    let dataFlat = ([] as number[]).concat(...data)
-    let yRange = d3.extent(dataFlat)
-    this.setYdomain(yRange[0], yRange[1])
-  }
-
-
-
 
   updateGroupSize() {
 
@@ -106,110 +234,32 @@ class LineGraph {
 
   }
 
-  addLine(data: number[], color: string) {
-      this.g.append("path")
-          .datum(data)
-          .attr("fill", "none")
-          .attr("stroke", color)
-          .attr("stroke-linejoin", "round")
-          .attr("stroke-linecap", "round")
-          .attr("stroke-width", 1.5)
-          .attr("d", this.lineRules);
-
-  }
-
-
-  OLDBUILD(group_list: string[], reduction_frequency: number) {
-      // Set up shape of SVG
-      var svgWidth = 610, svgHeight = 400;
-      var margin = { top: 20, right: 30, bottom: 50, left: 50 };
-      var width = svgWidth - margin.left - margin.right;
-      var height = svgHeight - margin.top - margin.bottom;
-      var svg = d3.select('svg')
-          .attr("width", svgWidth)
-          .attr("height", svgHeight);
-
-      // Create the scales
-      var g = svg.append("g")
-          .attr("transform",
-              "translate(" + margin.left + "," + margin.top + ")"
-          );
-
-      g.append("g")
-          .call(d3.axisLeft(this.yDomain))
-          .append("text")
-          .attr("fill", "#000")
-          .attr('font-size', '14px')
-          .attr("transform", "rotate(-90)")
-          .attr("x", -height/2)
-          .attr('y', -35)
-          .attr("text-anchor", "middle")
-          .text("Step Reward");
-
-      g.append("g")
-          .attr("transform", "translate(0," + height + ")")
-          .call(d3.axisBottom(this.xDomain).ticks(4))
-          .append("text")
-          .attr("fill", "#000")
-          .attr('font-size', '14px')
-          .attr('x', width / 2)
-          .attr("y", 36)
-          .attr("text-anchor", "middle")
-          .text("Training Step");
-
-
-      // // Iterate each group
-      // group_list.forEach(function (group: any) {
-      //   let datum = line(group['value'])
-      //     g.append("path")
-      //         .datum(group['value'])
-      //         .attr("fill", "none")
-      //         .attr("stroke", group['color'])
-      //         .attr("stroke-linejoin", "round")
-      //         .attr("stroke-linecap", "round")
-      //         .attr("stroke-width", 1.5)
-      //         .attr("d", line);
-      // })
-
-      // Build the legend
-      let legend_size = { width: 80, height: 30}
-      let legend = svg.append('g')
-          .attr("transform", "translate(" + (svgWidth - legend_size.width - margin.right)
-              + "," + (svgHeight - legend_size.height - margin.bottom - 10) + ")")
-
-      // Items within the legend
-      let known_groups: {[key: string]: any} = {}
-      let known_counter = 0
-      group_list.forEach(function (group: any) {
-          // See if this group has been added to the legend yet
-          let group_name = group['group']
-          if (known_groups[group_name] == null) {
-              known_groups[group_name] = true
-              known_counter ++
-
-              // Add the line w/ color
-              let y_base = 16 * (known_counter-1)
-              legend.append('line')
-                  .attr('stroke', group['color'])
-                  .attr('stroke-width', '3px')
-                  .attr('x1', 0)
-                  .attr('x2', 16)
-                  .attr('y1', y_base-4)
-                  .attr('y2', y_base-4)
-
-              // Add the name to the legend
-              legend.append('text')
-                  .attr("fill", "#000")
-                  .attr('font-size', '12px')
-                  .attr('x', 20)
-                  .attr("y", y_base)
-                  .attr("text-anchor", "left")
-                  .text(group['formal_name']);
-          }
+  addLengthLine(yValues: number[], color: string = 'red') {
+    // Create the line rules
+    let xMult = this._xAxis.multiplier
+    let yMult = this._yAxis.multiplier
+    let xDomain = this._xAxis.domain
+    let yDomain = this._yAxis.domain
+    let lineFunc = d3.line()
+      .x(function(_: any, idx: number) {
+        return xDomain(xMult * idx + 1)
       })
+      .y(function(d: any, _: number) {
+        return yDomain(yMult * d)
+      })
+
+    // Add the line and return it
+    let line = this._gLines.append("path")
+      .datum(yValues)
+      .attr("fill", "none")
+      .attr("stroke", color)
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", 1.5)
+      .attr("d", lineFunc);
+    this._lines.push(line)
+    return line
   }
-
-
 
 }
 
@@ -293,7 +343,11 @@ data.getAllGroupsField(['blocks', 'deeplab'], DATA_COMPRESSION, 'rewards')
   })
   .then(function(group_list) {
     let group_data: number[][] = group_list.map(function(group: any) { return group['value'] })
-    graph.setXdomainFromLengthDeep(group_data)
-    graph.setYdomainAutoDeep(group_data)
-    graph.OLDBUILD(group_list, DATA_COMPRESSION)
+    graph.xAxis.multiplier = DATA_COMPRESSION
+    graph.yAxis.setDataRangeFromDataDeep(group_data)
+    graph.xAxis.setDataRangeFromLengthDeep(group_data)
+    for (let groupKey in group_data) {
+      let group: any = group_list[groupKey]
+      graph.addLengthLine(group['value'], group['color'])
+    }
   })
