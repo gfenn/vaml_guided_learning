@@ -266,58 +266,149 @@ class LineGraph {
 
 
 
-// Applies exponentially weighted moving average to the data.
-function applyEwma(data: number[], beta: number) {
-    var ewma = data[0]
-    data.forEach(function(value, idx) {
-        ewma = value * beta + ewma * (1 - beta)
-        data[idx] = ewma
-    })
-    return data
+class DataFieldI {
+  group: string
+  compression: number
+  field: string
+  constructor(group: string, field: string, compression: number) {
+    this.group = group
+    this.compression = compression
+    this.field = field
+  }
 }
 
+class DataField extends DataFieldI {
+  values: number[]
+  constructor(group: string, field: string, compression: number, values: number[]) {
+    super(group, field, compression)
+    this.values = values
+  }
 
+  applyEwma(beta: number) {
+    let values = this.values
+    let ewma = values[0]
+    values.forEach(function(value: number, idx: number) {
+        ewma = value * beta + ewma * (1 - beta)
+        values[idx] = ewma
+    })
+  }
+}
 
+class DataRunField extends DataField {
+  run_id: number
+  constructor(group: string, run_id: number, compression: number, field: string, values: number[]) {
+    super(group, field, compression, values)
+    this.run_id = run_id
+  }
+}
 
+class DataGroupRunFields extends DataFieldI {
+    runs: DataRunField[]
+    constructor(runs: DataRunField[]) {
+      super(runs[0].group, runs[0].field, runs[0].compression)
+      this.runs = runs
+    }
+
+    applyEwma(beta: number) {
+      for (let run in this.runs) { this.runs[run].applyEwma(beta) }
+    }
+    getAllData(): number[][] {
+      return this.runs.map(function(run: DataRunField) {
+        return run.values
+      })
+    }
+}
+
+class DataMultipleGroupRunFields {
+  groups: {[key: string]: DataGroupRunFields} = {}
+  add(group: DataGroupRunFields) {
+    this.groups[group.group] = group
+    return this
+  }
+
+  applyEwma(beta: number) {
+    for (let key in this.groups) { this.groups[key].applyEwma(beta) }
+  }
+
+  getAllData(): number[][] {
+    let all: number[][] = []
+    let groups = this.groups
+    Object.keys(groups).forEach(function(key: string) {
+      let data = groups[key].getAllData()
+      for (let idx in data) {
+        all.push(data[idx])
+      }
+    })
+    return all
+  }
+}
+
+class DataGroupMetrics extends DataFieldI {
+  p25: DataField
+  p50: DataField
+  p75: DataField
+  constructor(group: string, compression: number, metrics: any) {
+    super(group, 'metrics', compression)
+    this.p25 = new DataField(group, 'p25', compression, metrics['p25'])
+    this.p50 = new DataField(group, 'p50', compression, metrics['p50'])
+    this.p75 = new DataField(group, 'p75', compression, metrics['p75'])
+  }
+
+  applyEwma(beta: number) {
+    this.p25.applyEwma(beta)
+    this.p50.applyEwma(beta)
+    this.p75.applyEwma(beta)
+  }
+}
 
 
 class DataCollector {
 
-  async getRunField(group: string, run: number, compression: number, field: string) {
+  async getRunField(group: string, run: number, compression: number, field: string): Promise<DataRunField> {
     return fetch('data/run_field?group=' + group
                  + '&run=' + run
                  + '&compression=' + compression
                  + '&field=' + field)
         .then(function(response) { return response.json(); })
         .then(function(values) {
-            return {
-                group: group,
-                run: run,
-                compression: compression,
-                field: field,
-                value: values
-            }
+          return new DataRunField(group, run, compression, field, values)
         })
   }
 
-
-  async getAllRunFields(group: string, run_id: number, compression: number, field: string) {
+  async getAllRunFields(group: string, compression: number, field: string): Promise<DataGroupRunFields> {
     let promises = []
-    for (run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
+    for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
       promises.push(this.getRunField(group, run_id, compression, field))
     }
     return Promise.all(promises)
+      .then(function(all_runs: DataRunField[]) {
+        return new DataGroupRunFields(all_runs)
+      })
   }
 
-  async getAllGroupsField(groups: string[], compression: number, field: string) {
+  async getAllGroupsField(groups: string[], compression: number, field: string): Promise<DataMultipleGroupRunFields> {
     let promises = []
     for (let group_id in groups) {
       let group = groups[group_id]
-      for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
-        promises.push(this.getRunField(group, run_id, compression, field))
-      }
+      promises.push(this.getAllRunFields(group, compression, field))
     }
     return Promise.all(promises)
+      .then(function(groups: DataGroupRunFields[]) {
+        let allGroups = new DataMultipleGroupRunFields()
+        for (let key in groups) {
+          allGroups.add(groups[key])
+        }
+        return allGroups
+      })
+  }
+
+  async getGroupMetrics(group: string, compression: number): Promise<DataGroupMetrics> {
+    return fetch('data/group_metrics?group=' + group
+                 + '&compression=' + compression)
+        .then(function(response) { return response.json(); })
+        .then(function(metrics) {
+          return new DataGroupMetrics(group, compression, metrics)
+        })
   }
 
 }
@@ -332,22 +423,30 @@ class DataCollector {
 
 let data = new DataCollector()
 let graph = new LineGraph(d3.select('#rewards-chart'))
-data.getAllGroupsField(['blocks', 'deeplab'], DATA_COMPRESSION, 'rewards')
-  .then(function(group_list) {
-    return group_list.map(function (group: any) {
-      group['color'] = GROUP_COLORS[group['group']]
-      group['value'] = applyEwma(group['value'], EWMA_BETA)
-      group['formatl_name'] = FORMAL_NAME[group['group']]
-      return group
-    })
+data.getAllGroupsField(['blocks'], DATA_COMPRESSION, 'rewards')
+  .then(function(groupData: DataMultipleGroupRunFields) {
+    groupData.applyEwma(EWMA_BETA)
+    return groupData
   })
-  .then(function(group_list) {
-    let group_data: number[][] = group_list.map(function(group: any) { return group['value'] })
+  .then(function(groupData: DataMultipleGroupRunFields) {
+    let allData = groupData.getAllData()
     graph.xAxis.multiplier = DATA_COMPRESSION
-    graph.yAxis.setDataRangeFromDataDeep(group_data)
-    graph.xAxis.setDataRangeFromLengthDeep(group_data)
-    for (let groupKey in group_data) {
-      let group: any = group_list[groupKey]
-      graph.addLengthLine(group['value'], group['color'])
+    graph.yAxis.setDataRangeFromDataDeep(allData)
+    graph.xAxis.setDataRangeFromLengthDeep(allData)
+    for (let groupKey in groupData.groups) {
+      let group: DataGroupRunFields = groupData.groups[groupKey]
+      let groupColor = GROUP_COLORS[groupKey]
+      for (let runKey in group.runs) {
+        graph.addLengthLine(group.runs[runKey].values, groupColor)
+      }
     }
   })
+  .then(function() {
+    return data.getGroupMetrics('blocks', DATA_COMPRESSION)
+  })
+  // .then(function(metrics) {
+  //   for (let key in metrics) {
+  //     let metric: any = metrics[key]
+  //     graph.addLengthLine(applyEwma(metric, EWMA_BETA), 'green')
+  //   }
+  // })
