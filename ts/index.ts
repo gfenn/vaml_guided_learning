@@ -261,6 +261,29 @@ class LineGraph {
     return line
   }
 
+  addShape(points: number[][], fill: string = 'lightblue', border: string = 'blue') {
+    let xMult = this._xAxis.multiplier
+    let yMult = this._yAxis.multiplier
+    let xDomain = this._xAxis.domain
+    let yDomain = this._yAxis.domain
+    let pointsFunction = function(data: number[][]) {
+      let converted = data.map(function(point: number[]) {
+        let x = xDomain(point[0] * xMult)
+        let y = yDomain(point[1] * yMult)
+        return [x, y].join(",")
+      })
+      return converted.join(" ");
+    }
+
+    let poly = this._gLines.append('polygon')
+      .datum(points)
+      .attr('points', pointsFunction)
+      .attr('fill', fill)
+      .attr('stroke', border)
+      .attr('stroke-width', 1)
+    return poly
+  }
+
 }
 
 
@@ -359,6 +382,28 @@ class DataGroupMetrics extends DataFieldI {
     this.p50.applyEwma(beta)
     this.p75.applyEwma(beta)
   }
+
+  getAllData(): number[][] {
+    let all: number[][] = []
+    all.push(this.p25.values)
+    all.push(this.p50.values)
+    all.push(this.p75.values)
+    return all
+  }
+
+  dataAsPoints(): number[][] {
+    let points: number[][] = []
+    // Start wth p25
+    this.p25.values.forEach(function(value: number, idx: number) {
+      points.push([idx+1, value])
+    })
+    // Now add p75 in reverse
+    let length = this.p75.values.length
+    this.p75.values.reverse().forEach(function(value: number, idx: number) {
+      points.push([length - idx, value])
+    })
+    return points
+  }
 }
 
 
@@ -420,19 +465,29 @@ class DataCollector {
 
 
 // "Main" - run on bootup
-
 let data = new DataCollector()
 let graph = new LineGraph(d3.select('#rewards-chart'))
-data.getAllGroupsField(['blocks'], DATA_COMPRESSION, 'rewards')
+data.getGroupMetrics('blocks', DATA_COMPRESSION)
+  .then(function(metrics: DataGroupMetrics) {
+    metrics.applyEwma(EWMA_BETA)
+    let allData = metrics.getAllData()
+    graph.xAxis.multiplier = DATA_COMPRESSION
+    graph.yAxis.setDataRangeFromDataDeep(allData)
+    graph.xAxis.setDataRangeFromLengthDeep(allData)
+    graph.addShape(metrics.dataAsPoints())
+  })
+  .then(function() {
+    return data.getAllGroupsField(['blocks'], DATA_COMPRESSION, 'rewards')
+  })
   .then(function(groupData: DataMultipleGroupRunFields) {
     groupData.applyEwma(EWMA_BETA)
     return groupData
   })
   .then(function(groupData: DataMultipleGroupRunFields) {
-    let allData = groupData.getAllData()
-    graph.xAxis.multiplier = DATA_COMPRESSION
-    graph.yAxis.setDataRangeFromDataDeep(allData)
-    graph.xAxis.setDataRangeFromLengthDeep(allData)
+    // let allData = groupData.getAllData()
+    // graph.xAxis.multiplier = DATA_COMPRESSION
+    // graph.yAxis.setDataRangeFromDataDeep(allData)
+    // graph.xAxis.setDataRangeFromLengthDeep(allData)
     for (let groupKey in groupData.groups) {
       let group: DataGroupRunFields = groupData.groups[groupKey]
       let groupColor = GROUP_COLORS[groupKey]
@@ -442,11 +497,5 @@ data.getAllGroupsField(['blocks'], DATA_COMPRESSION, 'rewards')
     }
   })
   .then(function() {
-    return data.getGroupMetrics('blocks', DATA_COMPRESSION)
+    return
   })
-  // .then(function(metrics) {
-  //   for (let key in metrics) {
-  //     let metric: any = metrics[key]
-  //     graph.addLengthLine(applyEwma(metric, EWMA_BETA), 'green')
-  //   }
-  // })
