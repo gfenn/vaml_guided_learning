@@ -1,4 +1,12 @@
-.line-chart
+body {
+  background: black;
+}
+
+svg
 {
     border: 1px solid lightgray;
+    background: white;
+    position: absolute;
+    left: 10px;
+    top: 10px;
 }

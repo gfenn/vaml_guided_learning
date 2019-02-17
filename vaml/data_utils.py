@@ -5,16 +5,11 @@ import numpy as np
 
 def load_group_metrics(group_folder, compression):
     data = load_all_runs_field_numpy(group_folder, 'rewards', compression)
-    return {
-        'p75': _calculate_percentile(data, 75),
-        'p50': _calculate_percentile(data, 50),
-        'p25': _calculate_percentile(data, 25),
+    percentiles = {
+        'p' + str(p): list(np.percentile(data, p, axis=0))
+        for p in [25, 50, 75]
     }
-
-
-def _calculate_percentile(data, percentile):
-    p = np.percentile(data, percentile, axis=0)
-    return list(p)
+    return percentiles
 
 
 def load_run_field(group_folder, run_id, field, compression):

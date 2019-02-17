@@ -3,9 +3,9 @@
     <head>
         <title>VAML Guided RL</title>
         <link rel="stylesheet" href="styles.css">
+        <script src='https://d3js.org/d3.v4.min.js'></script>
     </head>
     <body>
-        <script src='https://d3js.org/d3.v4.min.js'></script>
 
         <!-- Websocket components -->
         <!--<script>-->
@@ -22,8 +22,12 @@
         <!--</script>-->
 
         <h3>What a day!!</h3>
-        <svg class="line-chart"></svg>
+        <svg width=800 height=600>
+          <g id="rewards-chart"></g>
+        </svg>
 
-        <script src='demo.js'></script>
+
+
+        <script src='index.js'></script>
     </body>
 </html>
