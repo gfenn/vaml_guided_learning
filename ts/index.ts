@@ -52,8 +52,6 @@ class Size {
   }
 }
 
-
-
 // =============================================
 // =============================================
 // =============================================
@@ -111,8 +109,6 @@ class GraphShape {
 }
 
 class Line extends GraphShape {
-  private _pointsFunc: d3.Line<[number, number]>
-
   constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
     super(parent, xAxis, yAxis, points)
     this._g = parent.append("path")
@@ -127,29 +123,43 @@ class Line extends GraphShape {
   get g(): any { return this._g }
 
   rebuild() {
-    // Get constants
-    let xMult = this._xAxis.multiplier
-    let yMult = this._yAxis.multiplier
-    let xDomain = this._xAxis.domain
-    let yDomain = this._yAxis.domain
-
     // Build line function
-    this._pointsFunc = d3.line()
-      .x(function(p: any) {
-        return xDomain(p.x * xMult)
-      })
-      .y(function(p: any) {
-        return yDomain(p.y * yMult)
-      })
+    let pointsFunc = d3.line()
+      .x(this._xAxis.domainFunction())
+      .y(this._yAxis.domainFunction())
 
     this._g.datum(this._points)
-      .attr("d", this._pointsFunc);
+      .attr("d", pointsFunc);
+  }
+}
+
+class ShapeRect extends GraphShape {
+  constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
+    super(parent, xAxis, yAxis, points)
+    this._g = parent.append("rect")
+      .attr('fill', 'lightgray')
+      .attr('stroke', 'black')
+      .attr('stroke-width', 1)
+    this.rebuild()
+  }
+
+  get g(): any { return this._g }
+
+  rebuild() {
+    // Build line function
+    let xFunc = this._xAxis.domainFunction()
+    let yFunc = this._yAxis.domainFunction()
+    let x1 = xFunc(this._points[0])
+    let y1 = yFunc(this._points[0])
+    this._g.datum(this._points)
+      .attr('x', x1)
+      .attr('y', y1)
+      .attr('width', xFunc(this._points[1]) - x1)
+      .attr('height', yFunc(this._points[1]) - y1)
   }
 }
 
 class Polygon extends GraphShape {
-  private _pointsFunc: any
-
   constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
     super(parent, xAxis, yAxis, points)
     this._g = parent.append("polygon")
@@ -163,23 +173,21 @@ class Polygon extends GraphShape {
 
   rebuild() {
     // Get constants
-    let xMult = this._xAxis.multiplier
-    let yMult = this._yAxis.multiplier
-    let xDomain = this._xAxis.domain
-    let yDomain = this._yAxis.domain
+    let xDomain = this._xAxis.domainFunction()
+    let yDomain = this._yAxis.domainFunction()
 
     // Build line function
-    this._pointsFunc = function(data: Point[]) {
+    let pointsFunc = function(data: Point[]) {
       let converted = data.map(function(point: Point) {
-        let x = xDomain(point.x * xMult)
-        let y = yDomain(point.y * yMult)
+        let x = xDomain(point)
+        let y = yDomain(point)
         return [x, y].join(",")
       })
       return converted.join(" ");
     }
 
     this._g.datum(this._points)
-      .attr('points', this._pointsFunc)
+      .attr('points', pointsFunc)
   }
 }
 
@@ -196,7 +204,6 @@ class Polygon extends GraphShape {
 class LineGraphAxis {
   protected _chartSize: Size = new Size(2, 2)
   protected _dataRange: number[] = [1, 2]
-  protected _multiplier: number = 1
   protected _domain: any
   protected _gParent: any
   protected _gAxis: any
@@ -215,19 +222,12 @@ class LineGraphAxis {
   }
   get chartSize() { return this._chartSize }
 
-  set multiplier(multiplier: number) {
-    let delta = multiplier / this._multiplier
-    this._multiplier = multiplier
-    this._dataRange = [
-      this._dataRange[0] * delta,
-      this._dataRange[1] * delta
-    ]
-    this._rebuildDomain()
-  }
-  get multiplier() { return this._multiplier }
-
   get domain() {
     return this._domain
+  }
+
+  domainFunction(): any {
+    // Implemented by children
   }
 
   protected _buildAxisText() {
@@ -244,7 +244,7 @@ class LineGraphAxis {
   }
 
   setDataRange(low: number, high: number) {
-    this._dataRange = [low * this._multiplier, high * this._multiplier]
+    this._dataRange = [low, high]
     this._rebuildDomain()
   }
 }
@@ -272,6 +272,14 @@ class YAxis extends LineGraphAxis {
     this._gText.attr("x", -this._chartSize.height/2)
       .attr('y', -35)
   }
+
+  domainFunction(): any {
+    let domain = this._domain
+    return function(point: Point): number {
+      return domain(point.y)
+    }
+  }
+
 }
 
 class XAxis extends LineGraphAxis {
@@ -280,23 +288,30 @@ class XAxis extends LineGraphAxis {
     return [0, this._chartSize.width]
   }
 
-    protected _buildAxisText() {
-      this._gText = this._gAxis.append("text")
-        .attr("fill", "#000")
-        .attr('font-size', '14px')
-        .attr('x', this._chartSize.width/2)
-        .attr("y", 36)
-        .attr("text-anchor", "middle")
-        .text("Training Step");
-    }
+  protected _buildAxisText() {
+    this._gText = this._gAxis.append("text")
+      .attr("fill", "#000")
+      .attr('font-size', '14px')
+      .attr('x', this._chartSize.width/2)
+      .attr("y", 36)
+      .attr("text-anchor", "middle")
+      .text("Training Step");
+  }
 
-    protected _rebuildDomain() {
-      super._rebuildDomain()
-      this._gAxis.call(d3.axisBottom(this._domain).ticks(4))
-        .attr("transform", "translate(0," + this._chartSize.height + ")")
-      this._gText.attr('x', this._chartSize.width/2)
-        .attr("y", 36)
+  protected _rebuildDomain() {
+    super._rebuildDomain()
+    this._gAxis.call(d3.axisBottom(this._domain).ticks(4))
+      .attr("transform", "translate(0," + this._chartSize.height + ")")
+    this._gText.attr('x', this._chartSize.width/2)
+      .attr("y", 36)
+  }
+
+  domainFunction(): any {
+    let domain = this._domain
+    return function(point: Point): number {
+      return domain(point.x)
     }
+  }
 }
 
 
@@ -308,16 +323,9 @@ class XAxis extends LineGraphAxis {
 // =============================================
 // =============================================
 
-class LineGraph {
-
-  // Group that this line graph belongs to
+class ShapeRegion {
   private _g: any;
-  private _margin: Rectangle = new Rectangle(50, 50, 50, 50)
   private _size: Size = new Size(530, 330)
-
-  // Data points are compressed, so we need to expand them back
-  // out when determining the domain
-  xCompression: number = 1000
 
   // Axes
   protected _yAxis: YAxis
@@ -330,10 +338,12 @@ class LineGraph {
   constructor(g: any) {
     this._g = g
     this._gShapes = g.append('g')
-      .attr('class', 'graph-shapes')
+      .attr('class', 'shapes')
+      .attr('fill', 'lightgray')
+    this._gShapes.append('rect')
+      .attr('')
     this._yAxis = new YAxis(g)
     this._xAxis = new XAxis(g)
-    this._updateChartSize()
     this.updateAxes()
   }
 
@@ -345,18 +355,6 @@ class LineGraph {
     this.updateAxes()
   }
   get size() { return this._size }
-
-  set margins(margins: Rectangle) {
-    this._margin = margins
-    this._updateChartSize
-  }
-  get margins() { return this._margin }
-
-  private _updateChartSize() {
-    this._g.attr("transform",
-        "translate(" + this._margin.left + "," + this._margin.top + ")"
-    );
-  }
 
   getAllBoundingBox(): Rectangle {
     let boxes: Rectangle[] = []
@@ -415,8 +413,6 @@ class LineGraph {
 }
 
 
-
-
 // =============================================
 // =============================================
 // =============================================
@@ -427,36 +423,33 @@ class LineGraph {
 
 class DataFieldI {
   group: string
-  compression: number
   field: string
-  constructor(group: string, field: string, compression: number) {
+  constructor(group: string, field: string) {
     this.group = group
-    this.compression = compression
     this.field = field
   }
 }
 
 class DataField extends DataFieldI {
-  values: number[]
-  constructor(group: string, field: string, compression: number, values: number[]) {
-    super(group, field, compression)
-    this.values = values
+  points: Point[]
+  constructor(group: string, field: string, points: Point[]) {
+    super(group, field)
+    this.points = points
   }
 
   applyEwma(beta: number) {
-    let values = this.values
-    let ewma = values[0]
-    values.forEach(function(value: number, idx: number) {
-        ewma = value * beta + ewma * (1 - beta)
-        values[idx] = ewma
+    let ewma = this.points[0].y
+    this.points.forEach(function(point: Point) {
+        ewma = point.y * beta + ewma * (1 - beta)
+        point.y = ewma
     })
   }
 }
 
 class DataRunField extends DataField {
   run_id: number
-  constructor(group: string, run_id: number, compression: number, field: string, values: number[]) {
-    super(group, field, compression, values)
+  constructor(group: string, run_id: number, field: string, points: Point[]) {
+    super(group, field, points)
     this.run_id = run_id
   }
 }
@@ -464,17 +457,12 @@ class DataRunField extends DataField {
 class DataGroupRunFields extends DataFieldI {
     runs: DataRunField[]
     constructor(runs: DataRunField[]) {
-      super(runs[0].group, runs[0].field, runs[0].compression)
+      super(runs[0].group, runs[0].field)
       this.runs = runs
     }
 
     applyEwma(beta: number) {
       for (let run in this.runs) { this.runs[run].applyEwma(beta) }
-    }
-    getAllData(): number[][] {
-      return this.runs.map(function(run: DataRunField) {
-        return run.values
-      })
     }
 }
 
@@ -488,29 +476,17 @@ class DataMultipleGroupRunFields {
   applyEwma(beta: number) {
     for (let key in this.groups) { this.groups[key].applyEwma(beta) }
   }
-
-  getAllData(): number[][] {
-    let all: number[][] = []
-    let groups = this.groups
-    Object.keys(groups).forEach(function(key: string) {
-      let data = groups[key].getAllData()
-      for (let idx in data) {
-        all.push(data[idx])
-      }
-    })
-    return all
-  }
 }
 
 class DataGroupMetrics extends DataFieldI {
   p25: DataField
   p50: DataField
   p75: DataField
-  constructor(group: string, compression: number, metrics: any) {
-    super(group, 'metrics', compression)
-    this.p25 = new DataField(group, 'p25', compression, metrics['p25'])
-    this.p50 = new DataField(group, 'p50', compression, metrics['p50'])
-    this.p75 = new DataField(group, 'p75', compression, metrics['p75'])
+  constructor(group: string, metrics: any) {
+    super(group, 'metrics')
+    this.p25 = new DataField(group, 'p25', metrics['p25'])
+    this.p50 = new DataField(group, 'p50', metrics['p50'])
+    this.p75 = new DataField(group, 'p75', metrics['p75'])
   }
 
   applyEwma(beta: number) {
@@ -519,33 +495,10 @@ class DataGroupMetrics extends DataFieldI {
     this.p75.applyEwma(beta)
   }
 
-  getAllData(): number[][] {
-    let all: number[][] = []
-    all.push(this.p25.values)
-    all.push(this.p50.values)
-    all.push(this.p75.values)
-    return all
-  }
-
-  pointsFor50(): Point[] {
+  midlineShape(): Point[] {
     let points: Point[] = []
-    this.p50.values.forEach(function(value: number, idx: number) {
-      points.push(new Point(idx + 1, value))
-    })
-    return points
-  }
-
-  pointsFor25to75(): Point[] {
-    let points: Point[] = []
-    // Start wth p25
-    this.p25.values.forEach(function(value: number, idx: number) {
-      points.push(new Point(idx + 1, value))
-    })
-    // Now add p75 in reverse
-    let length = this.p75.values.length
-    this.p75.values.reverse().forEach(function(value: number, idx: number) {
-      points.push(new Point(length - idx, value))
-    })
+    points.push(...this.p25.points)
+    points.push(...this.p75.points.reverse())
     return points
   }
 }
@@ -553,14 +506,26 @@ class DataGroupMetrics extends DataFieldI {
 
 class DataCollector {
 
+  private _arrayToPoints(values: number[], compression: number): Point[] {
+    let points: Point[] = []
+    values.forEach(function(value: number, idx: number) {
+      points.push(new Point((idx + 1) * compression, value))
+    })
+    return points
+  }
+
   async getRunField(group: string, run: number, compression: number, field: string): Promise<DataRunField> {
+    let atp = this._arrayToPoints
     return fetch('data/run_field?group=' + group
                  + '&run=' + run
                  + '&compression=' + compression
                  + '&field=' + field)
         .then(function(response) { return response.json(); })
         .then(function(values) {
-          return new DataRunField(group, run, compression, field, values)
+          return atp(values, compression)
+        })
+        .then(function(points) {
+          return new DataRunField(group, run, field, points)
         })
   }
 
@@ -592,11 +557,19 @@ class DataCollector {
   }
 
   async getGroupMetrics(group: string, compression: number): Promise<DataGroupMetrics> {
+    let atp = this._arrayToPoints
     return fetch('data/group_metrics?group=' + group
                  + '&compression=' + compression)
         .then(function(response) { return response.json(); })
         .then(function(metrics) {
-          return new DataGroupMetrics(group, compression, metrics)
+          let data: any = {}
+          for (let key in metrics) {
+            data[key] = atp(metrics[key], compression)
+          }
+          return data
+        })
+        .then(function(metrics) {
+          return new DataGroupMetrics(group, metrics)
         })
   }
 
@@ -618,15 +591,17 @@ class DataCollector {
 
 // "Main" - run on bootup
 let data = new DataCollector()
-let graph = new LineGraph(d3.select('#rewards-chart'))
-graph.xAxis.multiplier = DATA_COMPRESSION
+// let graph = new LineGraph(d3.select('#rewards-chart'))
+// graph.xAxis.multiplier = DATA_COMPRESSION
+let rewardsChartG = d3.select('#rewards-chart')
+rewardsChartG.attr('transform', 'translate(80, 50)')
+let graph = new ShapeRegion(rewardsChartG)
 
-data.getGroupMetrics('blocks', DATA_COMPRESSION)
+data.getGroupMetrics('blocks', DATA_COMPRESSION * 10)
   .then(function(metrics: DataGroupMetrics) {
-    metrics.applyEwma(EWMA_BETA)
-    graph.addPolygon(metrics.pointsFor25to75())
-    graph.addLine(metrics.pointsFor50(), 'blue')
-    graph.addPolygon
+    metrics.applyEwma(EWMA_BETA * 10)
+    graph.addPolygon(metrics.midlineShape())
+    graph.addLine(metrics.p50.points, 'blue')
   })
   .then(function() {
     return data.getAllGroupsField(['blocks'], DATA_COMPRESSION, 'rewards')
@@ -637,10 +612,7 @@ data.getGroupMetrics('blocks', DATA_COMPRESSION)
       let group: DataGroupRunFields = groupData.groups[groupKey]
       let groupColor = GROUP_COLORS[groupKey]
       for (let runKey in group.runs) {
-        let points = group.runs[runKey].values.map(function (value: number, idx: number) {
-          return new Point(idx+1, value)
-        })
-        graph.addLine(points, groupColor)
+        graph.addLine(group.runs[runKey].points, groupColor)
       }
     }
   })
