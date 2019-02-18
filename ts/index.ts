@@ -388,7 +388,7 @@ class LineGraph {
     }
   }
 
-  addLengthLine(points: Point[], color: string = 'red') {
+  addLine(points: Point[], color: string = 'red') {
     let line = new Line(this._gShapes, this._xAxis, this._yAxis, points)
     line.g.attr('stroke', color)
     this._shapes.push(line)
@@ -527,7 +527,15 @@ class DataGroupMetrics extends DataFieldI {
     return all
   }
 
-  dataAsPoints(): Point[] {
+  pointsFor50(): Point[] {
+    let points: Point[] = []
+    this.p50.values.forEach(function(value: number, idx: number) {
+      points.push(new Point(idx + 1, value))
+    })
+    return points
+  }
+
+  pointsFor25to75(): Point[] {
     let points: Point[] = []
     // Start wth p25
     this.p25.values.forEach(function(value: number, idx: number) {
@@ -616,7 +624,9 @@ graph.xAxis.multiplier = DATA_COMPRESSION
 data.getGroupMetrics('blocks', DATA_COMPRESSION)
   .then(function(metrics: DataGroupMetrics) {
     metrics.applyEwma(EWMA_BETA)
-    graph.addPolygon(metrics.dataAsPoints())
+    graph.addPolygon(metrics.pointsFor25to75())
+    graph.addLine(metrics.pointsFor50(), 'blue')
+    graph.addPolygon
   })
   .then(function() {
     return data.getAllGroupsField(['blocks'], DATA_COMPRESSION, 'rewards')
@@ -630,7 +640,7 @@ data.getGroupMetrics('blocks', DATA_COMPRESSION)
         let points = group.runs[runKey].values.map(function (value: number, idx: number) {
           return new Point(idx+1, value)
         })
-        graph.addLengthLine(points, groupColor)
+        graph.addLine(points, groupColor)
       }
     }
   })
