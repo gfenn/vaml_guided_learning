@@ -34,6 +34,14 @@ class Rectangle {
 
 }
 
+class Point {
+  x: number
+  y: number
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y
+  }
+}
 
 class Size {
   width: number
@@ -46,6 +54,145 @@ class Size {
 
 
 
+// =============================================
+// =============================================
+// =============================================
+// =========== SHAPES === ======================
+// =============================================
+// =============================================
+// =============================================
+
+class GraphShape {
+  protected _parent: any
+  protected _xAxis: XAxis
+  protected _yAxis: YAxis
+  protected _points: Point[]
+  protected _boundingBox: Rectangle = new Rectangle(0, 0, 1, 1)
+  protected _g: any = null
+  constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
+    this._parent = parent
+    this._xAxis = xAxis
+    this._yAxis = yAxis
+    this._points = points
+    this._buildBoundingBox()
+  }
+  setAxes(xAxis: XAxis, yAxis: YAxis) {
+    this._xAxis = xAxis
+    this._yAxis = yAxis
+    this.rebuild()
+  }
+  get g () { return this._g }
+  set points(points: Point[]) {
+    this._points = points
+    this._buildBoundingBox()
+    this.rebuild()
+  }
+  get points(): Point[] { return this._points }
+  get xValues(): number[] {
+    return this._points.map(function(p: Point) { return p.x })
+  }
+  get yValues(): number[] {
+    return this._points.map(function(p: Point) { return p.y })
+  }
+  get boundingBox(): Rectangle {
+    return this._boundingBox
+  }
+  protected _buildBoundingBox() {
+    let xValues = this.xValues
+    let yValues = this.yValues
+    this._boundingBox = new Rectangle(
+      Math.min(...xValues),
+      Math.min(...yValues),
+      Math.max(...xValues),
+      Math.max(...yValues)
+    )
+  }
+  rebuild() {}
+}
+
+class Line extends GraphShape {
+  private _pointsFunc: d3.Line<[number, number]>
+
+  constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
+    super(parent, xAxis, yAxis, points)
+    this._g = parent.append("path")
+      .attr("fill", "none")
+      .attr("stroke", 'black')
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", 1.5)
+    this.rebuild()
+  }
+
+  get g(): any { return this._g }
+
+  rebuild() {
+    // Get constants
+    let xMult = this._xAxis.multiplier
+    let yMult = this._yAxis.multiplier
+    let xDomain = this._xAxis.domain
+    let yDomain = this._yAxis.domain
+
+    // Build line function
+    this._pointsFunc = d3.line()
+      .x(function(p: any) {
+        return xDomain(p.x * xMult)
+      })
+      .y(function(p: any) {
+        return yDomain(p.y * yMult)
+      })
+
+    this._g.datum(this._points)
+      .attr("d", this._pointsFunc);
+  }
+}
+
+class Polygon extends GraphShape {
+  private _pointsFunc: any
+
+  constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
+    super(parent, xAxis, yAxis, points)
+    this._g = parent.append("polygon")
+      .attr('fill', 'black')
+      .attr('stroke', 'black')
+      .attr('stroke-width', 1)
+    this.rebuild()
+  }
+
+  get g(): any { return this._g }
+
+  rebuild() {
+    // Get constants
+    let xMult = this._xAxis.multiplier
+    let yMult = this._yAxis.multiplier
+    let xDomain = this._xAxis.domain
+    let yDomain = this._yAxis.domain
+
+    // Build line function
+    this._pointsFunc = function(data: Point[]) {
+      let converted = data.map(function(point: Point) {
+        let x = xDomain(point.x * xMult)
+        let y = yDomain(point.y * yMult)
+        return [x, y].join(",")
+      })
+      return converted.join(" ");
+    }
+
+    this._g.datum(this._points)
+      .attr('points', this._pointsFunc)
+  }
+}
+
+
+
+
+// =============================================
+// =============================================
+// =============================================
+// =========== GRAPH AXES ======================
+// =============================================
+// =============================================
+// =============================================
 class LineGraphAxis {
   protected _chartSize: Size = new Size(2, 2)
   protected _dataRange: number[] = [1, 2]
@@ -100,24 +247,6 @@ class LineGraphAxis {
     this._dataRange = [low * this._multiplier, high * this._multiplier]
     this._rebuildDomain()
   }
-  setDataRangeFromData(data: number[]) {
-    let range = d3.extent(data)
-    this.setDataRange(range[0], range[1])
-  }
-  setDataRangeFromDataDeep(data: number[][]) {
-    let dataFlat = ([] as number[]).concat(...data)
-    let range = d3.extent(dataFlat)
-    this.setDataRange(range[0], range[1])
-  }
-  setDataRangeFromLength(data: number[]) {
-    this.setDataRange(1, data.length)
-  }
-  setDataRangeFromLengthDeep(data: number[][]) {
-    let lengths = data.map(function (subdata: number[]) {
-      return subdata.length
-    })
-    this.setDataRange(1, d3.extent(lengths)[1])
-  }
 }
 
 class YAxis extends LineGraphAxis {
@@ -171,6 +300,14 @@ class XAxis extends LineGraphAxis {
 }
 
 
+// =============================================
+// =============================================
+// =============================================
+// =========== GRAPH ===========================
+// =============================================
+// =============================================
+// =============================================
+
 class LineGraph {
 
   // Group that this line graph belongs to
@@ -186,18 +323,18 @@ class LineGraph {
   protected _yAxis: YAxis
   protected _xAxis: XAxis
 
-  // Lines
-  protected _gLines: any
-  protected _lines: any[] = []
+  // Shapes
+  protected _gShapes: any
+  protected _shapes: GraphShape[] = []
 
   constructor(g: any) {
     this._g = g
-    this._gLines = g.append('g')
-      .attr('class', 'lines')
+    this._gShapes = g.append('g')
+      .attr('class', 'graph-shapes')
     this._yAxis = new YAxis(g)
     this._xAxis = new XAxis(g)
     this._updateChartSize()
-    this._updateAxes()
+    this.updateAxes()
   }
 
   get yAxis() { return this._yAxis }
@@ -205,7 +342,7 @@ class LineGraph {
 
   set size(size: Size) {
     this._size = size
-    this._updateAxes()
+    this.updateAxes()
   }
   get size() { return this._size }
 
@@ -221,73 +358,72 @@ class LineGraph {
     );
   }
 
-  private _updateAxes() {
+  getAllBoundingBox(): Rectangle {
+    let boxes: Rectangle[] = []
+    for (let idx in this._shapes) {
+      boxes.push(this._shapes[idx].boundingBox)
+    }
+    if (boxes.length > 0) {
+      return new Rectangle(
+        Math.min(...boxes.map(function(r: Rectangle) { return r.left })),
+        Math.min(...boxes.map(function(r: Rectangle) { return r.top })),
+        Math.max(...boxes.map(function(r: Rectangle) { return r.right })),
+        Math.max(...boxes.map(function(r: Rectangle) { return r.bottom }))
+      )
+    }
+    return new Rectangle(0, 0, 1, 1)
+  }
+
+  updateAxes() {
+    // Determine bounding boxe
+    let box = this.getAllBoundingBox()
+    this._xAxis.setDataRange(box.left, box.right)
+    this._yAxis.setDataRange(box.top, box.bottom)
+
+    // Apply the size
     this._yAxis.chartSize = this._size
     this._xAxis.chartSize = this._size
+    for (let idx in this._shapes) {
+      this._shapes[idx].rebuild()
+    }
   }
 
-  updateGroupSize() {
-
-  }
-
-  configure() {
-
-  }
-
-  addLengthLine(yValues: number[], color: string = 'red') {
-    // Create the line rules
-    let xMult = this._xAxis.multiplier
-    let yMult = this._yAxis.multiplier
-    let xDomain = this._xAxis.domain
-    let yDomain = this._yAxis.domain
-    let lineFunc = d3.line()
-      .x(function(_: any, idx: number) {
-        return xDomain(xMult * idx + 1)
-      })
-      .y(function(d: any, _: number) {
-        return yDomain(yMult * d)
-      })
-
-    // Add the line and return it
-    let line = this._gLines.append("path")
-      .datum(yValues)
-      .attr("fill", "none")
-      .attr("stroke", color)
-      .attr("stroke-linejoin", "round")
-      .attr("stroke-linecap", "round")
-      .attr("stroke-width", 1.5)
-      .attr("d", lineFunc);
-    this._lines.push(line)
+  addLengthLine(points: Point[], color: string = 'red') {
+    let line = new Line(this._gShapes, this._xAxis, this._yAxis, points)
+    line.g.attr('stroke', color)
+    this._shapes.push(line)
+    this.updateAxes()
     return line
   }
 
-  addShape(points: number[][], fill: string = 'lightblue', border: string = 'blue') {
-    let xMult = this._xAxis.multiplier
-    let yMult = this._yAxis.multiplier
-    let xDomain = this._xAxis.domain
-    let yDomain = this._yAxis.domain
-    let pointsFunction = function(data: number[][]) {
-      let converted = data.map(function(point: number[]) {
-        let x = xDomain(point[0] * xMult)
-        let y = yDomain(point[1] * yMult)
-        return [x, y].join(",")
-      })
-      return converted.join(" ");
-    }
+  addPolygon(points: Point[], fill: string = 'lightblue', stroke: string = 'blue') {
+    let polygon = new Polygon(this._gShapes, this._xAxis, this._yAxis, points)
+    polygon.g.attr('fill', fill)
+    polygon.g.attr('stroke', stroke)
+    this._shapes.push(polygon)
+    this.updateAxes()
+    return polygon
+  }
 
-    let poly = this._gLines.append('polygon')
-      .datum(points)
-      .attr('points', pointsFunction)
-      .attr('fill', fill)
-      .attr('stroke', border)
-      .attr('stroke-width', 1)
-    return poly
+  removeShape(shape: any) {
+    this._shapes = this._shapes.filter(function(s: GraphShape) {
+      return s != shape
+    })
+    this.updateAxes()
   }
 
 }
 
 
 
+
+// =============================================
+// =============================================
+// =============================================
+// =========== DATA FIELDS =====================
+// =============================================
+// =============================================
+// =============================================
 
 class DataFieldI {
   group: string
@@ -391,16 +527,16 @@ class DataGroupMetrics extends DataFieldI {
     return all
   }
 
-  dataAsPoints(): number[][] {
-    let points: number[][] = []
+  dataAsPoints(): Point[] {
+    let points: Point[] = []
     // Start wth p25
     this.p25.values.forEach(function(value: number, idx: number) {
-      points.push([idx+1, value])
+      points.push(new Point(idx + 1, value))
     })
     // Now add p75 in reverse
     let length = this.p75.values.length
     this.p75.values.reverse().forEach(function(value: number, idx: number) {
-      points.push([length - idx, value])
+      points.push(new Point(length - idx, value))
     })
     return points
   }
@@ -463,39 +599,38 @@ class DataCollector {
 
 
 
+// =============================================
+// =============================================
+// =============================================
+// =========== MAIN ============================
+// =============================================
+// =============================================
+// =============================================
+
 
 // "Main" - run on bootup
 let data = new DataCollector()
 let graph = new LineGraph(d3.select('#rewards-chart'))
+graph.xAxis.multiplier = DATA_COMPRESSION
+
 data.getGroupMetrics('blocks', DATA_COMPRESSION)
   .then(function(metrics: DataGroupMetrics) {
     metrics.applyEwma(EWMA_BETA)
-    let allData = metrics.getAllData()
-    graph.xAxis.multiplier = DATA_COMPRESSION
-    graph.yAxis.setDataRangeFromDataDeep(allData)
-    graph.xAxis.setDataRangeFromLengthDeep(allData)
-    graph.addShape(metrics.dataAsPoints())
+    graph.addPolygon(metrics.dataAsPoints())
   })
   .then(function() {
     return data.getAllGroupsField(['blocks'], DATA_COMPRESSION, 'rewards')
   })
   .then(function(groupData: DataMultipleGroupRunFields) {
     groupData.applyEwma(EWMA_BETA)
-    return groupData
-  })
-  .then(function(groupData: DataMultipleGroupRunFields) {
-    // let allData = groupData.getAllData()
-    // graph.xAxis.multiplier = DATA_COMPRESSION
-    // graph.yAxis.setDataRangeFromDataDeep(allData)
-    // graph.xAxis.setDataRangeFromLengthDeep(allData)
     for (let groupKey in groupData.groups) {
       let group: DataGroupRunFields = groupData.groups[groupKey]
       let groupColor = GROUP_COLORS[groupKey]
       for (let runKey in group.runs) {
-        graph.addLengthLine(group.runs[runKey].values, groupColor)
+        let points = group.runs[runKey].values.map(function (value: number, idx: number) {
+          return new Point(idx+1, value)
+        })
+        graph.addLengthLine(points, groupColor)
       }
     }
-  })
-  .then(function() {
-    return
   })
