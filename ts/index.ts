@@ -25,6 +25,17 @@ let FORMAL_NAME: {[key: string]: string} = {
 // =============================================
 // =============================================
 
+function normalizeValues(values: number[]) {
+  // Adjust min so lowest value is 0
+  let minVal = values.reduce((min, val) => val < min ? val : min, values[0])
+  values = values.map(val => val - minVal)
+
+  // Divice each by max value so range is 0-1
+  let maxVal = values.reduce((max, val) => val > max ? val : max, values[0])
+  values = values.map(val => val / maxVal)
+  return values
+}
+
 class DataFieldI {
   group: string
   field: string
@@ -60,11 +71,9 @@ class DataRunField extends DataField {
 
 class DataGroupRunFields extends DataFieldI {
     runs: DataRunField[]
-    info: string
-    constructor(runs: DataRunField[], info: string = null) {
+    constructor(runs: DataRunField[]) {
       super(runs[0].group, runs[0].field)
       this.runs = runs
-      this.info = info
     }
 
     applyEwma(beta: number) {
@@ -109,6 +118,25 @@ class DataGroupMetrics extends DataFieldI {
   }
 }
 
+class PredictionSampleRowData {
+  sample: string
+  run: number
+  data: number[]
+  constructor(sample: string, run: number, data: number[]) {
+    this.sample = sample
+    this.run = run
+    this.data = data
+  }
+}
+
+class PredictionSampleData {
+  sample: string
+  rows: PredictionSampleRowData[]
+  constructor(sample: string, rows: PredictionSampleRowData[]) {
+    this.sample = sample
+    this.rows = rows
+  }
+}
 
 class DataCollector {
 
@@ -185,12 +213,23 @@ class DataCollector {
   }
 
   // TODO - needs to eventually be something where you pass in specific runs
-  async getMockSpectrogramData(group: string, sample: string, compression: number): Promise<DataGroupRunFields> {
-      return this.getAllRunFields(group, compression, 'rewards')
-        .then(function (data) {
-          data.info = sample
-          return data
+  async getSamplePredictionsForRun(group: string, run_id: number, sample: string, compression: number): Promise<PredictionSampleRowData> {
+      return this.getRunField(group, run_id, compression, 'rewards')
+        .then(data => {
+          let values = normalizeValues(data.points.map(p => p.y))
+          return new PredictionSampleRowData(sample, run_id, values)
         })
+  }
+
+  async getSamplePredictionsForGroup(group: string, sample: string, compression: number): Promise<PredictionSampleData> {
+    let promises: Promise<PredictionSampleRowData>[] = []
+    for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
+      promises.push(this.getSamplePredictionsForRun(group, run_id, sample, compression))
+    }
+    return Promise.all(promises)
+      .then(values => {
+        return new PredictionSampleData(sample, values)
+      })
   }
 
 }
@@ -663,8 +702,7 @@ class ShapeRegion {
 // =============================================
 // =============================================
 
-
-class Spectrogram {
+class SimpleG {
 
   g: SVGGElement
   gSelection: d3.Selection<SVGGElement, any, any, any>
@@ -676,33 +714,128 @@ class Spectrogram {
     this.gSelection = d3.select(g)
     this.width = width
     this.height = height
+  }
+
+}
+
+class SpectrogramRow extends SimpleG {
+
+  values: number[] = []
+
+  constructor(g: SVGGElement, width: number, height: number) {
+    super(g, width, height)
+  }
+
+  private rebuild(values: number[]) {
+    this.gSelection
+      .selectAll('rect')
+      .remove()
+
+    let xLoc = d3.scaleLinear()
+      .domain([0, values.length])
+      .range([0, this.width])
+
+    this.gSelection
+      .selectAll('rect')
+      .data(values)
+      .enter()
+      .append('rect')
+      .attr('x', (d, i) => xLoc(i))
+      .attr('y', 0)
+      .attr('width', xLoc(1))
+      .attr('height', this.height)
+  }
+
+  checkRebuild(values: number[]) {
+    if (values.length != this.values.length) {
+      this.rebuild(values)
+    }
+  }
+
+  data(values: number[]) {
+    this.checkRebuild(values)
+    let colorDomain = d3.scaleSequential(d3.interpolateRdYlGn)
+      .domain([0, 1])
+
+    this.gSelection
+      .selectAll('rect')
+      .data(values)
+      .attr('fill', d => colorDomain(d))
+  }
+
+}
+
+class Spectrogram extends SimpleG {
+
+  g: SVGGElement
+  gSelection: d3.Selection<SVGGElement, any, any, any>
+  width: number
+  height: number
+
+  rows: SpectrogramRow[] = []
+
+  constructor(g: SVGGElement, width: number, height: number) {
+    super(g, width, height)
 
     // Create a background rectangle
     this.gSelection.append('rect')
       .attr('width', this.width)
       .attr('height', this.height)
-      .attr('fill', 'lightgray')
+      .attr('class', 'spectrogramBackground')
+  }
+
+  private rebuild(numRows: number) {
+    this.rows.forEach(r => r.g.remove())
+    this.rows = []
+
+    // Determine vertical scale
+    let verticalScale = d3.scaleLinear()
+      .domain([0, numRows])
+      .range([0, this.height])
+    let rowHeight = verticalScale(1)
+
+    // Build each of the rows
+    for (let index = 0; index < numRows; index ++) {
+      let rowG = this.gSelection
+        .append('g')
+        .attr('width', this.width)
+        .attr('height', rowHeight)
+        .attr('transform', 'translate(0, ' + verticalScale(index) + ')')
+        .nodes()[0]
+      this.rows.push(new SpectrogramRow(rowG, this.width, rowHeight))
+    }
+  }
+
+  checkRebuild(numRows: number) {
+      if (numRows != this.rows.length) {
+        this.rebuild(numRows)
+      }
+  }
+
+  data(rows: PredictionSampleRowData[]) {
+    // Check for a rebuild
+    this.checkRebuild(rows.length)
+
+    // Set the datavalues
+    rows.forEach((row, index) => {
+      this.rows[index].data(row.data)
+    })
   }
 
 }
 
-class SpectrogramsArea {
+class SpectrogramsArea extends SimpleG {
 
-  g: SVGGElement
-  gSelection: d3.Selection<SVGGElement, any, any, any>
-  height: number
-  width: number
+  samples: string[] = []
   spectrogramsMap: {[key: string]: Spectrogram} = {}
 
-  constructor(gSelection: any, width: number, height: number) {
-    this.gSelection = gSelection
-    this.g = gSelection.nodes()[0]
-    this.width = width
-    this.height = height
+  constructor(g: SVGGElement, width: number, height: number) {
+    super(g, width, height)
   }
 
-  build(samples: string[]) {
+  private rebuild(samples: string[]) {
     // Determine the band size for the spectrograms
+    this.samples = samples
     let spectrogram_vertical_band = d3.scaleBand()
       .domain(samples)
       .range([0, this.height])
@@ -720,6 +853,7 @@ class SpectrogramsArea {
       .append('g')
       .attr('transform', d => 'translate(0, ' + spectrogram_vertical_band(d) + ')')
       .attr('height', spectrogram_vertical_band.bandwidth())
+      .attr('class', 'spectrogram')
       .nodes()
       .forEach(n => {
         let data: any = d3.select(n).datum()
@@ -728,31 +862,39 @@ class SpectrogramsArea {
       })
   }
 
-  data(groups: DataGroupRunFields[]) {
-    // Get unique list of samples
-    let samples = groups
-      .map(s => s.info)
-      .filter((v, i, a) => a.indexOf(v) === i);
-    this.build(samples)
+  checkRebuild(samples: string[]) {
+    if (samples.length != this.samples.length) {
+      this.rebuild(samples)
+    }
+  }
+
+  data(data: PredictionSampleData[]) {
+    // Check for a rebuild (make a unique set of samples)
+    let samples = data.map(s => s.sample)
+    this.checkRebuild(samples)
 
     // Populate the data
+    data.forEach(d => {
+      this.spectrogramsMap[d.sample].data(d.rows)
+    })
   }
 
 }
 
 
 // Spectrogram area
-let spectrogramsArea = new SpectrogramsArea(d3.select('#spectrograms'), 600, 100)
+let _spectrogramG: any = d3.select('#spectrograms').nodes()[0]
+let spectrogramsArea = new SpectrogramsArea(_spectrogramG, 600, 100)
 DATA.getAllSamples()
-  .then(function(samples: string[]) {
-    let promises: Promise<DataGroupRunFields>[] = []
+  .then(samples => {
+    let promises: Promise<PredictionSampleData>[] = []
     samples.forEach(function(sample) {
-      promises.push(DATA.getMockSpectrogramData('blocks', sample, DATA_COMPRESSION))
+      promises.push(DATA.getSamplePredictionsForGroup('blocks', sample, DATA_COMPRESSION))
     })
     return Promise.all(promises)
   })
-  .then(function(groups: DataGroupRunFields[]) {
-    spectrogramsArea.data(groups)
+  .then(data => {
+    spectrogramsArea.data(data)
   })
 
 
