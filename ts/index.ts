@@ -6,6 +6,10 @@ let DATA_COMPRESSION_PREDICTIONS = 10000
 let EWMA_BETA_LINES = 0.03
 let EWMA_BETA_SHAPE = 0.03
 
+let NUM_ACTIONS = 40
+let THROTTLE_ACTIONS = 8
+let STEER_ACTIONS = 5
+
 let GROUP_COLORS: {[key: string]: string} = {
     'blocks': 'red',
     'deeplab': 'lightgreen'
@@ -121,14 +125,33 @@ class DataGroupMetrics extends DataFieldI {
   }
 }
 
+class PredictionSampleStepData {
+  data: number[]
+  dataNormalized: number[]
+  totalDELETE: number
+  constructor(data: number[], totalDELETE: number) {
+    this.data = data
+    this.dataNormalized = normalizeValues(data)
+    this.totalDELETE = totalDELETE
+  }
+  get total() {
+    let total = this.data.reduce((p, c) => p + c, this.data[0])
+    return total / this.data.length
+  }
+  get totalNormalize() {
+    let total = this.dataNormalized.reduce((p, c) => p + c, this.dataNormalized[0])
+    return total / this.dataNormalized.length
+  }
+}
+
 class PredictionSampleRowData {
   sample: string
   run: number
-  data: number[]
-  constructor(sample: string, run: number, data: number[]) {
+  steps: PredictionSampleStepData[]
+  constructor(sample: string, run: number, steps: PredictionSampleStepData[]) {
     this.sample = sample
     this.run = run
-    this.data = data
+    this.steps = steps
   }
 }
 
@@ -210,7 +233,7 @@ class DataCollector {
   }
 
   async getAllSamples(): Promise<string[]> {
-    return Promise.resolve(["ex1", "ex2"])
+    return Promise.resolve(["blocks", "deeplab", "nodsf", "linear"])
     // return fetch('data/all_samples')
     //     .then(function(response) { return response.json(); })
   }
@@ -220,7 +243,15 @@ class DataCollector {
       return this.getRunField(group, run_id, compression, 'rewards')
         .then(data => {
           let values = normalizeValues(data.points.map(p => p.y))
-          return new PredictionSampleRowData(sample, run_id, values)
+          let steps = values.map(v => {
+            let mockData: number[] = []
+            for (let idx = 0; idx < 40; idx++) {
+              mockData.push(Math.random())
+            }
+            return new PredictionSampleStepData(mockData, v)
+          })
+
+          return new PredictionSampleRowData(sample, run_id, steps)
         })
   }
 
@@ -456,6 +487,9 @@ class LineGraphAxis {
   protected _gAxis: d3.Selection<SVGGElement, any, any, any>
   protected _gText: any
 
+  protected _noTicks: boolean = false
+  protected _noLine: boolean = false
+
   constructor(gParent: d3.Selection<SVGGElement, any, any, any>) {
     this._gParent = gParent
     this._gAxis = gParent
@@ -465,8 +499,12 @@ class LineGraphAxis {
 
   }
   set chartSize(size: Size) {
-    this._chartSize = size
-    this._rebuildDomain()
+    if (size.width != this._chartSize.width || size.height != this._chartSize.height) {
+      this._chartSize = size
+      this._chartSizeUpdated()
+      this._rebuildDomain()
+      this._updateRemovals()
+    }
   }
   get chartSize() { return this._chartSize }
 
@@ -474,6 +512,16 @@ class LineGraphAxis {
     return this._domain
   }
   get g() { return this._gAxis }
+  get gText() { return this._gText }
+
+  removeTicks () {
+    this._gAxis.selectAll('g').remove()
+    this._noTicks = true
+  }
+  removeLine () {
+    this._gAxis.select('path').remove()
+    this._noLine = true
+  }
 
   domainPointFunction(): any {}
   domainNumberFunction(): any {
@@ -491,6 +539,10 @@ class LineGraphAxis {
     return [1, 2]
   }
 
+  protected _chartSizeUpdated() {
+
+  }
+
   protected _rebuildDomain() {
     this._domain = d3.scaleLinear().rangeRound(this._axisPixelRange());
     this._domain.domain(this._dataRange)
@@ -499,6 +551,12 @@ class LineGraphAxis {
   setDataRange(low: number, high: number) {
     this._dataRange = [low, high]
     this._rebuildDomain()
+    this._updateRemovals()
+  }
+
+  protected _updateRemovals() {
+    if (this._noLine) { this.removeLine() }
+    if (this._noTicks) { this.removeTicks() }
   }
 }
 
@@ -508,22 +566,24 @@ class YAxis extends LineGraphAxis {
     return [this._chartSize.height, 0]
   }
 
+  protected _chartSizeUpdated() {
+    this._gText.attr("x", -this._chartSize.height/2)
+      .attr('y', -35)
+  }
+
   protected _buildAxisText() {
     this._gText = this._gAxis.append("text")
       .attr("fill", "#000")
       .attr('font-size', '14px')
       .attr("transform", "rotate(-90)")
-      .attr("x", -this._chartSize.height/2)
-      .attr('y', -35)
       .attr("text-anchor", "middle")
       .text("Step Reward");
+    this._chartSizeUpdated()
   }
 
   protected _rebuildDomain() {
     super._rebuildDomain()
     this._gAxis.call(d3.axisLeft(this._domain).ticks(6))
-    this._gText.attr("x", -this._chartSize.height/2)
-      .attr('y', -35)
   }
 
   domainPointFunction(): any {
@@ -549,6 +609,15 @@ class XAxis extends LineGraphAxis {
     return [0, this._chartSize.width]
   }
 
+  protected _chartSizeUpdated() {
+    let text = this._gText.attr('x', this._chartSize.width/2)
+    if (this._top) {
+      text.attr("y", -20)
+    } else {
+      text.attr("y", 36)
+    }
+  }
+
   protected _buildAxisText() {
     this._gText = this._gAxis.append("text")
       .attr("fill", "#000")
@@ -557,6 +626,7 @@ class XAxis extends LineGraphAxis {
       .attr("y", 36)
       .attr("text-anchor", "middle")
       .text("Training Step");
+    this._chartSizeUpdated()
   }
 
   protected _rebuildDomain() {
@@ -570,15 +640,12 @@ class XAxis extends LineGraphAxis {
     }
 
     let axis = this._gAxis.call(axisCall.ticks(4))
-    let text = this._gText.attr('x', this._chartSize.width/2)
 
     // Organize based on if on top or bottom
     if (this._top) {
       axis.attr("transform", "translate(0,0)")
-      text.attr("y", -20)
     } else {
       axis.attr("transform", "translate(0," + this._chartSize.height + ")")
-      text.attr("y", 36)
     }
   }
 
@@ -602,7 +669,7 @@ class XAxis extends LineGraphAxis {
 class ShapeRegion {
   private _g: d3.Selection<SVGGElement, any, any, any>;
   private _size: Size = new Size(600, 200)
-  private _boundingPadding: Rectangle = new Rectangle(0, 0.05, 0, 0.05)
+  protected _boundingPadding: Rectangle = new Rectangle(0, 0.05, 0, 0.05)
 
   // Axes
   protected _yAxis: YAxis
@@ -717,6 +784,9 @@ class ShapeRegion {
 
 
 
+const CURVE_BOXPLOT_FILL = '#f5f5ff'
+const CURVE_BOXPLOT_LINE = '#dbdbff'
+
 
 class RewardsGraph extends ShapeRegion {
 
@@ -738,14 +808,14 @@ class RewardsGraph extends ShapeRegion {
   private buildCurveBoxplotShape(): Polygon {
     let shape = this.addPolygon([new Point(0, 0), new Point(0, 1), new Point (1, 0)])
     shape.g
-      .attr('fill', '#e8e8ff')
-      .attr('stroke', '#a3a3ff')
+      .attr('fill', CURVE_BOXPLOT_FILL)
+      .attr('stroke', CURVE_BOXPLOT_LINE)
     shape.hide()
     return shape
   }
 
   private buildCurveBoxplotCenterline(): Line {
-    let line = this.addLine([new Point(0, 0), new Point(1, 1)], '#a3a3ff')
+    let line = this.addLine([new Point(0, 0), new Point(1, 1)], CURVE_BOXPLOT_LINE)
     line.hide()
     return line
   }
@@ -787,10 +857,6 @@ class RewardsGraph extends ShapeRegion {
 
 
 
-// Rewards graph
-let REWARDS_GRAPH = new RewardsGraph()
-REWARDS_GRAPH.loadCurveBoxplotData('blocks')
-REWARDS_GRAPH.loadRunLines('blocks')
 
 
 
@@ -801,16 +867,13 @@ REWARDS_GRAPH.loadRunLines('blocks')
 
 
 
-
-
-
-// =============================================
-// =============================================
-// =============================================
-// =========== GRAPH ===========================
-// =============================================
-// =============================================
-// =============================================
+// ===================================================
+// ===================================================
+// ===================================================
+// =========== SPECTROGRAM ===========================
+// ===================================================
+// ===================================================
+// ===================================================
 
 class SimpleG {
 
@@ -845,6 +908,7 @@ class SpectrogramRow extends SimpleG {
       .domain([0, values.length])
       .range([0, this.width])
 
+    // Create the boxes
     this.gSelection
       .selectAll('rect')
       .data(values)
@@ -862,7 +926,11 @@ class SpectrogramRow extends SimpleG {
     }
   }
 
-  data(values: number[]) {
+  data(steps: PredictionSampleStepData[]) {
+    // Map
+    let values = steps.map(s => s.totalDELETE)
+
+    // Rebuild
     this.checkRebuild(values)
     let colorDomain = d3.scaleSequential(d3.interpolateRdYlGn)
       .domain([0, 1])
@@ -882,10 +950,20 @@ class Spectrogram extends SimpleG {
   width: number
   height: number
 
+  label: any
   rows: SpectrogramRow[] = []
 
   constructor(g: SVGGElement, width: number, height: number) {
     super(g, width, height)
+
+    this.label = this.gSelection
+      .append('text')
+      .attr("fill", "#000")
+      .attr('font-size', '10px')
+      .attr('x', -5)
+      .attr('y', height/2 +3)
+      .attr("text-anchor", "end")
+      .text("label");
 
     // Create a background rectangle
     this.gSelection.append('rect')
@@ -928,8 +1006,12 @@ class Spectrogram extends SimpleG {
 
     // Set the datavalues
     rows.forEach((row, index) => {
-      this.rows[index].data(row.data)
+      this.rows[index].data(row.steps)
     })
+  }
+
+  set text (text: string) {
+    this.label.text(text)
   }
 
 }
@@ -939,8 +1021,8 @@ class SpectrogramsArea extends SimpleG {
   samples: string[] = []
   spectrogramsMap: {[key: string]: Spectrogram} = {}
 
-  constructor(g: SVGGElement, width: number, height: number) {
-    super(g, width, height)
+  constructor() {
+    super(d3.select('#spectrograms').node() as any, 600, 150)
   }
 
   private rebuild(samples: string[]) {
@@ -985,43 +1067,112 @@ class SpectrogramsArea extends SimpleG {
 
     // Populate the data
     data.forEach(d => {
-      this.spectrogramsMap[d.sample].data(d.rows)
+      let s = this.spectrogramsMap[d.sample]
+      s.data(d.rows)
+      s.text = d.sample
     })
   }
 
 }
 
 
-// Spectrogram area
-let _spectrogramG: any = d3.select('#spectrograms').nodes()[0]
-let spectrogramsArea = new SpectrogramsArea(_spectrogramG, 600, 100)
+
+// =======================================================
+// =======================================================
+// =======================================================
+// =========== CONFUSIONMATRIX ===========================
+// =======================================================
+// =======================================================
+// =======================================================
+
+class PredictionMatrix extends ShapeRegion {
+
+  squares: Box[] = []
+
+  constructor() {
+    super(d3.select('#predictions'))
+    this.size = new Size(100, 160)
+    this._boundingPadding = new Rectangle(0, 0, 0, 0)
+    this._xAxis.removeTicks()
+    this._xAxis.removeLine()
+    this._xAxis.gText.text('Steering').attr('y', 15)
+
+    this._yAxis.removeTicks()
+    this._yAxis.removeLine()
+    this._yAxis.gText.text('Throttle').attr('y', -10)
+
+    // Determine bands
+    let xDomain = d3.scaleLinear()
+      .domain([0, STEER_ACTIONS])
+      .range([0, this.size.width])
+    let yDomain = d3.scaleLinear()
+      .domain([0, THROTTLE_ACTIONS])
+      .range([this.size.height, 0])
+
+    let xBandwidth = xDomain(1)
+    let yBandwidth = yDomain(THROTTLE_ACTIONS-1) - yDomain(THROTTLE_ACTIONS)
+
+    // 40 data points
+    for (let idx = 0; idx < NUM_ACTIONS; idx ++) {
+      let xVal = xDomain(idx % STEER_ACTIONS)
+      let yVal = yDomain(Math.floor(idx / STEER_ACTIONS))
+      let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
+      this.squares.push(box)
+    }
+  }
+
+}
+
+
+// =============================================
+// =============================================
+// =============================================
+// =========== SETUP ===========================
+// =============================================
+// =============================================
+// =============================================
+
+// Build the components first
+let REWARDS_GRAPH = new RewardsGraph()
+let SPECTROGRAMS = new SpectrogramsArea()
+let PREDICTIONS = new PredictionMatrix()
+
+// Populate the rewards
+// REWARDS_GRAPH.loadCurveBoxplotData('blocks')
+// REWARDS_GRAPH.loadRunLines('blocks')
+
+// Populate the spectrogram area + predictions matrix
 DATA.getAllSamples()
   .then(samples => {
     let promises: Promise<PredictionSampleData>[] = []
     samples.forEach(function(sample) {
-      promises.push(DATA.getSamplePredictionsForGroup('blocks', sample, DATA_COMPRESSION_PREDICTIONS))
+      promises.push(DATA.getSamplePredictionsForGroup(sample, sample, DATA_COMPRESSION_PREDICTIONS))
     })
     return Promise.all(promises)
   })
   .then(data => {
-    spectrogramsArea.data(data)
+    SPECTROGRAMS.data(data)
   })
 
 
 
-// ========================================================================
-// ========================================================================
-// ========================================================================
-// ========================================================================
-// [X] Create a spectrogram plot with no axes and no data
-// [X] Use the rewards data (normalized) to populate Red -> Green pixels at constant luminosity
-// [X] Allow multiple runs here, sizing pixels accordingly in the y axis
-// [ ] Each spectrogram group should have a name to its left
-// [ ] Put an image to the right of each spectrogram group
-// [ ]
 
-// [ ] Spectrograms blocks will each be a "sample group", and each row is a "sample" (currently rows are runs)
-//
+// ========================================================================
+// ========================================================================
+// ========================================================================
+// ========================================================================
+// [ ] Allow generation of fake prediction data across the 40 actions (apply softmax)
+    // [ ] Normalize post-softmax, so min value is 0 and max is 1
+// [ ] Predictions "confusion" matrix underneath the spectrograms w/ mock data
+    // [ ] 5 columns, 8 rows
+    // [ ] colorized based on value
+
+// [ ] Click on a point on the rewards graph to draw a cyan vertical line
+    // [ ] Update predictions matrix accordingly
+
+// [ ] Allow clicking on a spectrogram to select that sample w/ cyan
+    // [ ] Update the predictions matrix accordingly w/ title
+    // [ ] Have first spectrogram start off selected
 
 // [ ] Have the contour metrics properly adapt for when runs are different lengths
 // [ ] Merge to master
