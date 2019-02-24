@@ -1,7 +1,10 @@
 
 let RUNS_PER_GROUP = 3
-let DATA_COMPRESSION = 1000
-let EWMA_BETA = 0.01
+let DATA_COMPRESSION_LINES = 1000
+let DATA_COMPRESSION_SHAPE = 1000
+let DATA_COMPRESSION_PREDICTIONS = 10000
+let EWMA_BETA_LINES = 0.03
+let EWMA_BETA_SHAPE = 0.03
 
 let GROUP_COLORS: {[key: string]: string} = {
     'blocks': 'red',
@@ -295,6 +298,7 @@ class GraphShape {
   protected _yAxis: YAxis
   protected _boundingBox: Rectangle = new Rectangle(0, 0, 1, 1)
   protected _g: any = null
+  protected _hidden: boolean = false
   constructor(parent: any, xAxis: XAxis, yAxis: YAxis) {
     this._parent = parent
     this._xAxis = xAxis
@@ -309,6 +313,15 @@ class GraphShape {
   get boundingBox(): Rectangle {
     return this._boundingBox
   }
+  hide () {
+    this._hidden = true
+    this._g.attr('visibility', 'hidden')
+  }
+  unhide () {
+    this._hidden = false
+    this._g.attr('visibility', 'visible')
+  }
+  get hidden () { return this._hidden }
   rebuild() {}
 }
 
@@ -322,7 +335,6 @@ class GraphShapePointBased extends GraphShape {
   set points(points: Point[]) {
     this._points = points
     this._buildBoundingBox()
-    this.rebuild()
   }
   get points(): Point[] { return this._points }
   get xValues(): number[] {
@@ -440,13 +452,14 @@ class LineGraphAxis {
   protected _chartSize: Size = new Size(2, 2)
   protected _dataRange: number[] = [1, 2]
   protected _domain: any
-  protected _gParent: any
-  protected _gAxis: any
+  protected _gParent: d3.Selection<SVGGElement, any, any, any>
+  protected _gAxis: d3.Selection<SVGGElement, any, any, any>
   protected _gText: any
 
-  constructor(gParent: any) {
+  constructor(gParent: d3.Selection<SVGGElement, any, any, any>) {
     this._gParent = gParent
-    this._gAxis = gParent.append("g")
+    this._gAxis = gParent
+      .append("g")
       .attr('class', 'axis')
     this._buildAxisText()
 
@@ -460,6 +473,7 @@ class LineGraphAxis {
   get domain() {
     return this._domain
   }
+  get g() { return this._gAxis }
 
   domainPointFunction(): any {}
   domainNumberFunction(): any {
@@ -507,7 +521,7 @@ class YAxis extends LineGraphAxis {
 
   protected _rebuildDomain() {
     super._rebuildDomain()
-    this._gAxis.call(d3.axisLeft(this._domain))
+    this._gAxis.call(d3.axisLeft(this._domain).ticks(6))
     this._gText.attr("x", -this._chartSize.height/2)
       .attr('y', -35)
   }
@@ -522,6 +536,14 @@ class YAxis extends LineGraphAxis {
 }
 
 class XAxis extends LineGraphAxis {
+
+  private _top: boolean = false
+
+  set top(top: boolean) {
+    this._top = top
+    this._rebuildDomain()
+  }
+  get top() { return this._top }
 
   protected _axisPixelRange(): number[] {
     return [0, this._chartSize.width]
@@ -539,10 +561,25 @@ class XAxis extends LineGraphAxis {
 
   protected _rebuildDomain() {
     super._rebuildDomain()
-    this._gAxis.call(d3.axisBottom(this._domain).ticks(4))
-      .attr("transform", "translate(0," + this._chartSize.height + ")")
-    this._gText.attr('x', this._chartSize.width/2)
-      .attr("y", 36)
+
+    let axisCall: any = null
+    if (this._top) {
+      axisCall = d3.axisTop(this._domain)
+    } else {
+      axisCall = d3.axisBottom(this._domain)
+    }
+
+    let axis = this._gAxis.call(axisCall.ticks(4))
+    let text = this._gText.attr('x', this._chartSize.width/2)
+
+    // Organize based on if on top or bottom
+    if (this._top) {
+      axis.attr("transform", "translate(0,0)")
+      text.attr("y", -20)
+    } else {
+      axis.attr("transform", "translate(0," + this._chartSize.height + ")")
+      text.attr("y", 36)
+    }
   }
 
   domainPointFunction(): any {
@@ -563,8 +600,9 @@ class XAxis extends LineGraphAxis {
 // =============================================
 
 class ShapeRegion {
-  private _g: any;
-  private _size: Size = new Size(530, 330)
+  private _g: d3.Selection<SVGGElement, any, any, any>;
+  private _size: Size = new Size(600, 200)
+  private _boundingPadding: Rectangle = new Rectangle(0, 0.05, 0, 0.05)
 
   // Axes
   protected _yAxis: YAxis
@@ -574,17 +612,18 @@ class ShapeRegion {
   protected _gShapes: any
   protected _shapes: GraphShape[] = []
 
-  constructor(g: any) {
+  constructor(g: d3.Selection<SVGGElement, any, any, any>) {
     this._g = g
-    this._gShapes = g.append('g')
+    this._gShapes = g
+      .append('g')
       .attr('class', 'shapes')
       .attr('fill', 'lightgray')
-    this._gShapes.append('rect')
-      .attr('')
     this._yAxis = new YAxis(g)
     this._xAxis = new XAxis(g)
     this.updateAxes()
   }
+
+  get g() { return this._g }
 
   get yAxis() { return this._yAxis }
   get xAxis() { return this._xAxis }
@@ -598,7 +637,10 @@ class ShapeRegion {
   getAllBoundingBox(): Rectangle {
     let boxes: Rectangle[] = []
     for (let idx in this._shapes) {
-      boxes.push(this._shapes[idx].boundingBox)
+      let shape = this._shapes[idx]
+      if (!shape.hidden) {
+        boxes.push(this._shapes[idx].boundingBox)
+      }
     }
     if (boxes.length > 0) {
       return new Rectangle(
@@ -614,8 +656,16 @@ class ShapeRegion {
   updateAxes() {
     // Determine bounding boxe
     let box = this.getAllBoundingBox()
-    this._xAxis.setDataRange(box.left, box.right)
-    this._yAxis.setDataRange(box.bottom, box.top)
+
+    // Set axes
+    this._xAxis.setDataRange(
+      box.left - this._boundingPadding.left * box.width,
+      box.right + this._boundingPadding.right * box.width
+    )
+    this._yAxis.setDataRange(
+      box.bottom - this._boundingPadding.bottom * box.height,
+      box.top + this._boundingPadding.top * box.height
+    )
 
     // Apply the size
     this._yAxis.chartSize = this._size
@@ -663,24 +713,84 @@ class ShapeRegion {
 
 
 
-// // Rewards graph
-// let rewardsChartG = d3.select('#rewards-chart')
-// let graph = new ShapeRegion(rewardsChartG)
-// data.getGroupMetrics('blocks', DATA_COMPRESSION * 10)
-//   .then(function(metrics: DataGroupMetrics) {
-//     metrics.applyEwma(EWMA_BETA * 10)
-//     graph.addPolygon(metrics.midlineShape())
-//       .g.attr('fill', '#e8e8ff')
-//       .attr('stroke', '#a3a3ff')
-//       graph.addLine(metrics.p50.points, '#a3a3ff')
-//   })
-//   .then(function() {
-//     return data.getRunField('blocks', 1, DATA_COMPRESSION, 'rewards')
-//   })
-//   .then(function(runData: DataRunField) {
-//     runData.applyEwma(EWMA_BETA)
-//     graph.addLine(runData.points, GROUP_COLORS[runData.group])
-//   })
+
+
+
+
+
+class RewardsGraph extends ShapeRegion {
+
+  private _curveBoxplotShape: Polygon
+  private _curveBoxplotCenterline: Line
+  private _runLines: Line[] = []
+
+  constructor() {
+    super(d3.select('#rewards-chart'))
+
+    // Add a polygon and hide it
+    this._curveBoxplotShape = this.buildCurveBoxplotShape()
+    this._curveBoxplotCenterline = this.buildCurveBoxplotCenterline()
+
+    // Put the X axis on top
+    this._xAxis.top = true
+  }
+
+  private buildCurveBoxplotShape(): Polygon {
+    let shape = this.addPolygon([new Point(0, 0), new Point(0, 1), new Point (1, 0)])
+    shape.g
+      .attr('fill', '#e8e8ff')
+      .attr('stroke', '#a3a3ff')
+    shape.hide()
+    return shape
+  }
+
+  private buildCurveBoxplotCenterline(): Line {
+    let line = this.addLine([new Point(0, 0), new Point(1, 1)], '#a3a3ff')
+    line.hide()
+    return line
+  }
+
+
+  loadCurveBoxplotData(group: string) {
+    DATA.getGroupMetrics(group, DATA_COMPRESSION_SHAPE)
+      .then(metrics => {
+        metrics.applyEwma(EWMA_BETA_SHAPE)
+
+        // Update background shape
+        this._curveBoxplotShape.unhide()
+        this._curveBoxplotShape.points = metrics.midlineShape()
+
+        // Centerline
+        this._curveBoxplotCenterline.unhide()
+        this._curveBoxplotCenterline.points = metrics.p50.points
+
+        // Update
+        this.updateAxes()
+      })
+  }
+
+  loadRunLines(group: string) {
+    // Remove old lines
+    this._runLines.forEach(line => line.g.remove())
+    this._runLines = []
+
+    // Add lines
+    DATA.getRunField(group, 1, DATA_COMPRESSION_LINES, 'rewards')
+      .then(runData => {
+        runData.applyEwma(EWMA_BETA_LINES)
+        let line = this.addLine(runData.points, GROUP_COLORS[runData.group])
+        this._runLines.push(line)
+      })
+  }
+
+}
+
+
+
+// Rewards graph
+let REWARDS_GRAPH = new RewardsGraph()
+REWARDS_GRAPH.loadCurveBoxplotData('blocks')
+REWARDS_GRAPH.loadRunLines('blocks')
 
 
 
@@ -889,7 +999,7 @@ DATA.getAllSamples()
   .then(samples => {
     let promises: Promise<PredictionSampleData>[] = []
     samples.forEach(function(sample) {
-      promises.push(DATA.getSamplePredictionsForGroup('blocks', sample, DATA_COMPRESSION))
+      promises.push(DATA.getSamplePredictionsForGroup('blocks', sample, DATA_COMPRESSION_PREDICTIONS))
     })
     return Promise.all(promises)
   })
@@ -904,11 +1014,14 @@ DATA.getAllSamples()
 // ========================================================================
 // ========================================================================
 // [X] Create a spectrogram plot with no axes and no data
-// [ ] Use the rewards data (normalized) to populate Red -> Green pixels at constant luminosity
-// [ ] Allow multiple runs here, sizing pixels accordingly in the y axis
-// [ ] Add an area that has a simple list of groups + runs
-// [ ] Clicking on any run will select/deselect it (doesn't do anything yet)
-// [ ] Selected runs are presented on the other graphs
-// [ ] If no selection, stuff doesn't break (just show nothing)
-// [ ] Show contour metrics based on groups of selected runs
+// [X] Use the rewards data (normalized) to populate Red -> Green pixels at constant luminosity
+// [X] Allow multiple runs here, sizing pixels accordingly in the y axis
+// [ ] Each spectrogram group should have a name to its left
+// [ ] Put an image to the right of each spectrogram group
+// [ ]
+
+// [ ] Spectrograms blocks will each be a "sample group", and each row is a "sample" (currently rows are runs)
+//
+
 // [ ] Have the contour metrics properly adapt for when runs are different lengths
+// [ ] Merge to master
