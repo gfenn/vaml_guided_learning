@@ -1161,7 +1161,8 @@ class SpectrogramsArea extends SimpleG {
 class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
-  squareOutlines: Box[] = []
+  private _hoverValue: any
+  sampleData: PredictionSampleStepData
 
   constructor() {
     super(d3.select('#predictions'))
@@ -1173,6 +1174,13 @@ class PredictionMatrix extends ShapeRegion {
       .attr('y', -1)
       .attr('width', this.size.width + 2)
       .attr('height', this.size.height + 2)
+
+    this._hoverValue = this.g.append('text')
+      .attr('x', this.size.width + 10)
+      .attr('y', this.size.height / 2)
+      .attr('font-size', 10)
+      .text('Value: 0')
+      .attr('fill', 'white')
 
     this._boundingPadding = new Rectangle(0, 0, 0, 0)
     this._xAxis.removeTicks()
@@ -1202,33 +1210,30 @@ class PredictionMatrix extends ShapeRegion {
       // Square
       let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
       box.g.attr('stroke', 'clear')
+        .on('mouseover', (v: any) => { this.hoverDisplay(v) })
+        .on('mouseout', (v: any) => { this.stopHover() })
       this.squares.push(box)
-
-      // // Square Outline
-      // let padding = 1
-      // let outline = this.addBox(new Rectangle(
-      //   xVal + padding,
-      //   yVal + yBandwidth - padding,
-      //   xVal + xBandwidth - padding,
-      //   yVal + padding))
-      // outline.g
-      //   .attr('fill', 'none')
-      //   .attr('stroke', 'black')
-      //   .attr('stroke-width', 2)
-      //   .attr('opacity', 1)
-      // this.squareOutlines.push(outline)
     }
   }
 
   data(data: PredictionSampleStepData, sample: PredictionSample) {
-    // let colors: {[key: number]: string} = {0: 'red', 1: 'yellow', 2: 'green'}
+    this.sampleData = data
     let valueDomain = d3.scaleSequential(d3.interpolateBlues).domain([0, 1])
-
     data.dataNormalized.forEach((v, i) => {
       // let color = colors[sample.labels[i]]
-      this.squares[i].g.attr('fill', valueDomain(v))
-      // this.squareOutlines[i].g.attr('stroke', 'clear')
+      this.squares[i].g.attr('fill', valueDomain(v)).datum(data.data[i])
     })
+  }
+
+  private hoverDisplay(data: any) {
+    let value = Math.round(data * 1000) / 1000
+    this._hoverValue
+      .text('Value: ' + value)
+      .attr('fill', 'black')
+  }
+
+  private stopHover() {
+    this._hoverValue.attr('fill', 'white')
   }
 
 }
@@ -1282,7 +1287,9 @@ function setSelectedSample(sample: string) {
 // ========================================================================
 // [ ] Click on a point on the rewards graph to draw a cyan vertical line
     // [ ] Update predictions matrix accordingly
+    // [ ] Also allow clicking on spectrograms to select a time
 // [ ] Show title of selection above confusion matrix
+// [ ] Hover over confusion matrix square to show the value?
 
 // [ ] Have the contour metrics properly adapt for when runs are different lengths
 // [ ] Merge to master
