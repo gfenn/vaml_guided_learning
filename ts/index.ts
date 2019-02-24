@@ -43,6 +43,23 @@ function normalizeValues(values: number[]) {
   return values
 }
 
+function generateMockPredictionData(): number[] {
+  let mockData: number[] = []
+  for (let idx = 0; idx < 40; idx++) {
+    mockData.push(Math.random())
+  }
+  let total = mockData.reduce((p, value) => p + Math.exp(value), 0)
+  return mockData.map(v => Math.exp(v) / total)
+}
+
+function generateMockPredictionLabels(): number[] {
+  let mockData: number[] = []
+  for (let idx = 0; idx < 40; idx++) {
+    mockData.push(Math.floor(Math.random()*3))
+  }
+  return mockData
+}
+
 class DataFieldI {
   group: string
   field: string
@@ -126,29 +143,40 @@ class DataGroupMetrics extends DataFieldI {
 }
 
 class PredictionSampleStepData {
+  // The 0-1 probability of the action being taken -> softmax result
   data: number[]
+  // Probabilities normalized so highest probability is 1 and lowest is 0
   dataNormalized: number[]
-  totalDELETE: number
-  constructor(data: number[], totalDELETE: number) {
+  // correctness value (0 to 1)
+  correctness: number
+  constructor(data: number[], correctness: number, labels: number[]) {
     this.data = data
     this.dataNormalized = normalizeValues(data)
-    this.totalDELETE = totalDELETE
+
+    // // Measure the correctness
+    // let score = data.map((probability, index) => {
+    //   // Label is 0 (wrong = 0 points), 1 (neutral = 0.5 points), or 2 (good = 1 point)
+    //   return probability * (labels[index] / 3)
+    // })
+    // this.correctness = score.reduce((p, c) => p + c, 0) / score.length
+    this.correctness = correctness
   }
-  get total() {
-    let total = this.data.reduce((p, c) => p + c, this.data[0])
-    return total / this.data.length
-  }
-  get totalNormalize() {
-    let total = this.dataNormalized.reduce((p, c) => p + c, this.dataNormalized[0])
-    return total / this.dataNormalized.length
+}
+
+class PredictionSample {
+  name: string
+  labels: number[]
+  constructor(name: string, labels: number[] = generateMockPredictionLabels()) {
+    this.name = name
+    this.labels = labels
   }
 }
 
 class PredictionSampleRowData {
-  sample: string
+  sample: PredictionSample
   run: number
   steps: PredictionSampleStepData[]
-  constructor(sample: string, run: number, steps: PredictionSampleStepData[]) {
+  constructor(sample: PredictionSample, run: number, steps: PredictionSampleStepData[]) {
     this.sample = sample
     this.run = run
     this.steps = steps
@@ -156,9 +184,9 @@ class PredictionSampleRowData {
 }
 
 class PredictionSampleData {
-  sample: string
+  sample: PredictionSample
   rows: PredictionSampleRowData[]
-  constructor(sample: string, rows: PredictionSampleRowData[]) {
+  constructor(sample: PredictionSample, rows: PredictionSampleRowData[]) {
     this.sample = sample
     this.rows = rows
   }
@@ -232,30 +260,39 @@ class DataCollector {
         })
   }
 
-  async getAllSamples(): Promise<string[]> {
-    return Promise.resolve(["blocks", "deeplab", "nodsf", "linear"])
+  async getAllSamples(): Promise<PredictionSample[]> {
+    let samples = ["blocks", "deeplab", "nodsf", "linear"].map(sample => {
+      return new PredictionSample(sample)
+    })
+    return Promise.resolve(samples)
     // return fetch('data/all_samples')
     //     .then(function(response) { return response.json(); })
   }
 
   // TODO - needs to eventually be something where you pass in specific runs
-  async getSamplePredictionsForRun(group: string, run_id: number, sample: string, compression: number): Promise<PredictionSampleRowData> {
+  async getSamplePredictionsForRun(
+    group: string,
+    run_id: number,
+    sample: PredictionSample,
+    compression: number
+  ): Promise<PredictionSampleRowData> {
       return this.getRunField(group, run_id, compression, 'rewards')
         .then(data => {
           let values = normalizeValues(data.points.map(p => p.y))
           let steps = values.map(v => {
-            let mockData: number[] = []
-            for (let idx = 0; idx < 40; idx++) {
-              mockData.push(Math.random())
-            }
-            return new PredictionSampleStepData(mockData, v)
+            let mockData: number[] = generateMockPredictionData()
+            return new PredictionSampleStepData(mockData, v, sample.labels)
           })
 
           return new PredictionSampleRowData(sample, run_id, steps)
         })
   }
 
-  async getSamplePredictionsForGroup(group: string, sample: string, compression: number): Promise<PredictionSampleData> {
+  async getSamplePredictionsForGroup(
+    group: string,
+    sample: PredictionSample,
+    compression: number
+  ): Promise<PredictionSampleData> {
     let promises: Promise<PredictionSampleRowData>[] = []
     for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
       promises.push(this.getSamplePredictionsForRun(group, run_id, sample, compression))
@@ -602,6 +639,7 @@ class XAxis extends LineGraphAxis {
   set top(top: boolean) {
     this._top = top
     this._rebuildDomain()
+    this._chartSizeUpdated()
   }
   get top() { return this._top }
 
@@ -928,7 +966,7 @@ class SpectrogramRow extends SimpleG {
 
   data(steps: PredictionSampleStepData[]) {
     // Map
-    let values = steps.map(s => s.totalDELETE)
+    let values = steps.map(s => s.correctness)
 
     // Rebuild
     this.checkRebuild(values)
@@ -1062,14 +1100,14 @@ class SpectrogramsArea extends SimpleG {
 
   data(data: PredictionSampleData[]) {
     // Check for a rebuild (make a unique set of samples)
-    let samples = data.map(s => s.sample)
+    let samples = data.map(s => s.sample.name)
     this.checkRebuild(samples)
 
     // Populate the data
     data.forEach(d => {
-      let s = this.spectrogramsMap[d.sample]
+      let s = this.spectrogramsMap[d.sample.name]
       s.data(d.rows)
-      s.text = d.sample
+      s.text = d.sample.name
     })
   }
 
@@ -1088,10 +1126,19 @@ class SpectrogramsArea extends SimpleG {
 class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
+  squareOutlines: Box[] = []
 
   constructor() {
     super(d3.select('#predictions'))
     this.size = new Size(100, 160)
+
+    // Add a background
+    this.g.insert('rect', 'g')
+      .attr('x', -1)
+      .attr('y', -1)
+      .attr('width', this.size.width + 2)
+      .attr('height', this.size.height + 2)
+
     this._boundingPadding = new Rectangle(0, 0, 0, 0)
     this._xAxis.removeTicks()
     this._xAxis.removeLine()
@@ -1116,9 +1163,37 @@ class PredictionMatrix extends ShapeRegion {
     for (let idx = 0; idx < NUM_ACTIONS; idx ++) {
       let xVal = xDomain(idx % STEER_ACTIONS)
       let yVal = yDomain(Math.floor(idx / STEER_ACTIONS))
+
+      // Square
       let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
+      box.g.attr('stroke', 'clear')
       this.squares.push(box)
+
+      // // Square Outline
+      // let padding = 1
+      // let outline = this.addBox(new Rectangle(
+      //   xVal + padding,
+      //   yVal + yBandwidth - padding,
+      //   xVal + xBandwidth - padding,
+      //   yVal + padding))
+      // outline.g
+      //   .attr('fill', 'none')
+      //   .attr('stroke', 'black')
+      //   .attr('stroke-width', 2)
+      //   .attr('opacity', 1)
+      // this.squareOutlines.push(outline)
     }
+  }
+
+  data(data: PredictionSampleStepData, sample: PredictionSample) {
+    // let colors: {[key: number]: string} = {0: 'red', 1: 'yellow', 2: 'green'}
+    let valueDomain = d3.scaleSequential(d3.interpolateGreys).domain([0, 1])
+
+    data.dataNormalized.forEach((v, i) => {
+      // let color = colors[sample.labels[i]]
+      this.squares[i].g.attr('fill', valueDomain(v))
+      // this.squareOutlines[i].g.attr('stroke', 'clear')
+    })
   }
 
 }
@@ -1146,12 +1221,16 @@ DATA.getAllSamples()
   .then(samples => {
     let promises: Promise<PredictionSampleData>[] = []
     samples.forEach(function(sample) {
-      promises.push(DATA.getSamplePredictionsForGroup(sample, sample, DATA_COMPRESSION_PREDICTIONS))
+      promises.push(DATA.getSamplePredictionsForGroup('blocks', sample, DATA_COMPRESSION_PREDICTIONS))
     })
     return Promise.all(promises)
   })
   .then(data => {
+    // Spectrograms
     SPECTROGRAMS.data(data)
+
+    // Predictions
+    PREDICTIONS.data(data[0].rows[0].steps[0], data[0].sample)
   })
 
 
@@ -1161,12 +1240,6 @@ DATA.getAllSamples()
 // ========================================================================
 // ========================================================================
 // ========================================================================
-// [ ] Allow generation of fake prediction data across the 40 actions (apply softmax)
-    // [ ] Normalize post-softmax, so min value is 0 and max is 1
-// [ ] Predictions "confusion" matrix underneath the spectrograms w/ mock data
-    // [ ] 5 columns, 8 rows
-    // [ ] colorized based on value
-
 // [ ] Click on a point on the rewards graph to draw a cyan vertical line
     // [ ] Update predictions matrix accordingly
 
