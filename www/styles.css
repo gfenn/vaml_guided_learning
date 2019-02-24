@@ -20,6 +20,6 @@ svg
 }
 
 .spectrogramBackground.selected {
-  stroke: #00bcd4;
-  stroke-width: 2;
+  stroke: black;
+  stroke-width: 6;
 }

@@ -192,6 +192,19 @@ class PredictionSampleData {
   }
 }
 
+class PredictionGroupSampleData {
+  dataBySample: {[key: string]: PredictionSampleData} = {}
+  samples: PredictionSample[] = []
+  data: PredictionSampleData[] = []
+  constructor(data: PredictionSampleData[]) {
+    data.forEach(d => {
+      this.dataBySample[d.sample.name] = d
+      this.samples.push(d.sample)
+    })
+    this.data = data
+  }
+}
+
 class DataCollector {
 
   private _arrayToPoints(values: number[], compression: number): Point[] {
@@ -276,19 +289,21 @@ class DataCollector {
     sample: PredictionSample,
     compression: number
   ): Promise<PredictionSampleRowData> {
-      return this.getRunField(group, run_id, compression, 'rewards')
-        .then(data => {
-          let values = normalizeValues(data.points.map(p => p.y))
-          let steps = values.map(v => {
-            let mockData: number[] = generateMockPredictionData()
-            return new PredictionSampleStepData(mockData, v, sample.labels)
-          })
-
-          return new PredictionSampleRowData(sample, run_id, steps)
+    // SINCE THIS IS MOCK
+    group = sample.name
+    return this.getRunField(group, run_id, compression, 'rewards')
+      .then(data => {
+        let values = normalizeValues(data.points.map(p => p.y))
+        let steps = values.map(v => {
+          let mockData: number[] = generateMockPredictionData()
+          return new PredictionSampleStepData(mockData, v, sample.labels)
         })
+
+        return new PredictionSampleRowData(sample, run_id, steps)
+      })
   }
 
-  async getSamplePredictionsForGroup(
+  async getSamplePredictionsForGroupSample(
     group: string,
     sample: PredictionSample,
     compression: number
@@ -301,6 +316,19 @@ class DataCollector {
       .then(values => {
         return new PredictionSampleData(sample, values)
       })
+  }
+
+  async getSamplePredictionsForGroup(
+    group: string,
+    compression: number
+  ): Promise<PredictionGroupSampleData> {
+    return this.getAllSamples().then(samples => {
+      let promises: Promise<PredictionSampleData>[] = []
+      samples.forEach(sample => {
+        promises.push(this.getSamplePredictionsForGroupSample(group, sample, compression))
+      })
+      return Promise.all(promises).then(values => new PredictionGroupSampleData(values))
+    })
   }
 
 }
@@ -983,16 +1011,18 @@ class SpectrogramRow extends SimpleG {
 
 class Spectrogram extends SimpleG {
 
-  g: SVGGElement
-  gSelection: d3.Selection<SVGGElement, any, any, any>
-  width: number
-  height: number
-
+  sample: PredictionSample
   label: any
   rows: SpectrogramRow[] = []
+  background: any
 
-  constructor(g: SVGGElement, width: number, height: number) {
+  constructor(g: SVGGElement, width: number, height: number, sample: PredictionSample) {
     super(g, width, height)
+    this.sample = sample
+
+    this.g.onmousedown = e => {
+      this.select()
+    }
 
     this.label = this.gSelection
       .append('text')
@@ -1004,10 +1034,16 @@ class Spectrogram extends SimpleG {
       .text("label");
 
     // Create a background rectangle
-    this.gSelection.append('rect')
+    this.background = this.gSelection.append('rect')
       .attr('width', this.width)
       .attr('height', this.height)
       .attr('class', 'spectrogramBackground')
+  }
+
+  select() {
+    setSelectedSample(this.sample.name)
+    d3.selectAll('.spectrogramBackground').attr('class', 'spectrogramBackground')
+    this.background.attr('class', 'spectrogramBackground selected')
   }
 
   private rebuild(numRows: number) {
@@ -1056,18 +1092,18 @@ class Spectrogram extends SimpleG {
 
 class SpectrogramsArea extends SimpleG {
 
-  samples: string[] = []
+  samples: PredictionSample[] = []
   spectrogramsMap: {[key: string]: Spectrogram} = {}
 
   constructor() {
     super(d3.select('#spectrograms').node() as any, 600, 150)
   }
 
-  private rebuild(samples: string[]) {
+  private rebuild(samples: PredictionSample[]) {
     // Determine the band size for the spectrograms
     this.samples = samples
     let spectrogram_vertical_band = d3.scaleBand()
-      .domain(samples)
+      .domain(samples.map(s => s.name))
       .range([0, this.height])
       .paddingInner(0.1)
 
@@ -1081,30 +1117,29 @@ class SpectrogramsArea extends SimpleG {
       .data(samples)
       .enter()
       .append('g')
-      .attr('transform', d => 'translate(0, ' + spectrogram_vertical_band(d) + ')')
+      .attr('transform', d => 'translate(0, ' + spectrogram_vertical_band(d.name) + ')')
       .attr('height', spectrogram_vertical_band.bandwidth())
       .attr('class', 'spectrogram')
       .nodes()
-      .forEach(n => {
-        let data: any = d3.select(n).datum()
-        let spectrogram = new Spectrogram(n, this.width, spectrogram_vertical_band.bandwidth())
-        this.spectrogramsMap[data] = spectrogram
+      .forEach(node => {
+        let data: PredictionSample = d3.select(node).datum() as PredictionSample
+        let spectrogram = new Spectrogram(node, this.width, spectrogram_vertical_band.bandwidth(), data)
+        this.spectrogramsMap[data.name] = spectrogram
       })
   }
 
-  checkRebuild(samples: string[]) {
+  checkRebuild(samples: PredictionSample[]) {
     if (samples.length != this.samples.length) {
       this.rebuild(samples)
     }
   }
 
-  data(data: PredictionSampleData[]) {
+  data(data: PredictionGroupSampleData) {
     // Check for a rebuild (make a unique set of samples)
-    let samples = data.map(s => s.sample.name)
-    this.checkRebuild(samples)
+    this.checkRebuild(data.samples)
 
     // Populate the data
-    data.forEach(d => {
+    data.data.forEach(d => {
       let s = this.spectrogramsMap[d.sample.name]
       s.data(d.rows)
       s.text = d.sample.name
@@ -1187,7 +1222,7 @@ class PredictionMatrix extends ShapeRegion {
 
   data(data: PredictionSampleStepData, sample: PredictionSample) {
     // let colors: {[key: number]: string} = {0: 'red', 1: 'yellow', 2: 'green'}
-    let valueDomain = d3.scaleSequential(d3.interpolateGreys).domain([0, 1])
+    let valueDomain = d3.scaleSequential(d3.interpolateBlues).domain([0, 1])
 
     data.dataNormalized.forEach((v, i) => {
       // let color = colors[sample.labels[i]]
@@ -1207,33 +1242,38 @@ class PredictionMatrix extends ShapeRegion {
 // =============================================
 // =============================================
 
+// State values
+let SELECTED_STEP: number = 0
+let SELECTED_SAMPLE: string = ''
+
 // Build the components first
 let REWARDS_GRAPH = new RewardsGraph()
 let SPECTROGRAMS = new SpectrogramsArea()
 let PREDICTIONS = new PredictionMatrix()
 
 // Populate the rewards
-// REWARDS_GRAPH.loadCurveBoxplotData('blocks')
-// REWARDS_GRAPH.loadRunLines('blocks')
+REWARDS_GRAPH.loadCurveBoxplotData('blocks')
+REWARDS_GRAPH.loadRunLines('blocks')
+
+let STORED_DATA: PredictionGroupSampleData
 
 // Populate the spectrogram area + predictions matrix
-DATA.getAllSamples()
-  .then(samples => {
-    let promises: Promise<PredictionSampleData>[] = []
-    samples.forEach(function(sample) {
-      promises.push(DATA.getSamplePredictionsForGroup('blocks', sample, DATA_COMPRESSION_PREDICTIONS))
-    })
-    return Promise.all(promises)
-  })
+DATA.getSamplePredictionsForGroup('blocks', DATA_COMPRESSION_PREDICTIONS)
   .then(data => {
+    // Save the data
+    STORED_DATA = data
+
     // Spectrograms
     SPECTROGRAMS.data(data)
-
-    // Predictions
-    PREDICTIONS.data(data[0].rows[0].steps[0], data[0].sample)
+    SPECTROGRAMS.spectrogramsMap['blocks'].select()
   })
 
-
+function setSelectedSample(sample: string) {
+  if (sample == SELECTED_SAMPLE) return
+  SELECTED_SAMPLE = sample
+  let sampleData = STORED_DATA.dataBySample[sample]
+  PREDICTIONS.data(sampleData.rows[RUNS_PER_GROUP-1].steps[SELECTED_STEP], sampleData.sample)
+}
 
 
 // ========================================================================
@@ -1242,10 +1282,7 @@ DATA.getAllSamples()
 // ========================================================================
 // [ ] Click on a point on the rewards graph to draw a cyan vertical line
     // [ ] Update predictions matrix accordingly
-
-// [ ] Allow clicking on a spectrogram to select that sample w/ cyan
-    // [ ] Update the predictions matrix accordingly w/ title
-    // [ ] Have first spectrogram start off selected
+// [ ] Show title of selection above confusion matrix
 
 // [ ] Have the contour metrics properly adapt for when runs are different lengths
 // [ ] Merge to master
