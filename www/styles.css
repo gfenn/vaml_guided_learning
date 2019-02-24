@@ -1,4 +1,25 @@
-.line-chart
+body {
+  background: rgb(250, 250, 250);
+}
+
+svg
 {
     border: 1px solid lightgray;
+    background: white;
+    position: absolute;
+    left: 10px;
+    top: 10px;
+}
+
+
+.spectrogramBackground
+{
+  stroke: lightgray;
+  stroke-width: 1;
+  fill: rgb(247, 247, 247);
+}
+
+.spectrogramBackground.selected {
+  stroke: #00bcd4;
+  stroke-width: 2;
 }

@@ -1,3 +1,5 @@
 *.idea
 *__pycache__
 data/*
+www/*.js
+node_modules/*

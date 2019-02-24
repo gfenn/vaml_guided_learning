@@ -10,7 +10,7 @@ import websockets
 from http.server import HTTPServer
 from http.server import BaseHTTPRequestHandler
 
-from vaml.data_utils import load_run_steps, compress_steps
+from vaml.data_utils import load_run_field, load_group_metrics
 
 SERVER = None
 
@@ -54,7 +54,7 @@ class VamlServer:
         asyncio.get_event_loop().run_forever()
 
     def _serve_http(self):
-        print(time.asctime(), 'Server Started - %s:%s' % (self.hostname, self.port))
+        print(time.asctime(), 'Server Started - http://%s:%s' % (self.hostname, self.port))
         try:
             self.server.serve_forever()
         except KeyboardInterrupt:
@@ -98,6 +98,16 @@ class VamlHandler(BaseHTTPRequestHandler):
             converter=converter
         )
 
+    def _get_group_metrics(self, parameters):
+        self._send_simple(
+            content_type='application/json',
+            content=json.dumps(load_group_metrics(
+                group_folder='../thesis_data/{group}'.format(group=parameters['group']),
+                compression=int(parameters['compression'])
+            )),
+            converter=bytes_utf8_converter
+        )
+
     def _get_run_metadata(self, parameters):
         self._forward_file(
             filename='../thesis_data/blocks/run_{id}/metadata.json'.format(
@@ -106,17 +116,14 @@ class VamlHandler(BaseHTTPRequestHandler):
             root=''
         )
 
-    def _get_runsteps(self, parameters):
+    def _get_run_field(self, parameters):
         # Load the data
-        data = load_run_steps(
-            root_folder='../thesis_data/{group}'.format(group=parameters['group']),
-            run_id=parameters['run']
+        data = load_run_field(
+            group_folder='../thesis_data/{group}'.format(group=parameters['group']),
+            run_id=parameters['run'],
+            compression=int(parameters['compression']),
+            field=parameters['field']
         )
-
-        # Compress?
-        compression = int(parameters['compression'])
-        if compression > 1:
-            data = compress_steps(data, compression)
 
         # Send the data
         self._send_simple(
@@ -142,8 +149,9 @@ class VamlHandler(BaseHTTPRequestHandler):
         known_paths = {
             '/': self._get_index,
             '/index.html': self._get_index,
+            '/data/group_metrics': self._get_group_metrics,
             '/data/run': self._get_run_metadata,
-            '/data/runsteps': self._get_runsteps,
+            '/data/run_field': self._get_run_field,
             '/data/episode': self._get_episode_data
         }
 

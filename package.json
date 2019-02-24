@@ -1,0 +1,16 @@
+{
+  "name": "vaml",
+  "version": "0.0.1",
+  "description": "",
+  "main": "./dist/index",
+  "types": "./dist/index",
+  "scripts": {
+    "tsc": "tsc"
+  },
+  "author": "Grant Fennessy",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/d3": "^5.7.1",
+    "commonjs": "0.0.1"
+  }
+}
