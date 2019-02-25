@@ -2,7 +2,6 @@ import asyncio
 import time
 
 import json
-from io import StringIO
 
 import os
 import threading
@@ -68,7 +67,7 @@ class VamlServer:
 
 
 async def websocket_handler(websocket, path):
-    await websocket.send("Howdy do!")
+    await websocket.send("Testing")
     # while True:
     #     now = datetime.datetime.utcnow().isoformat() + 'Z'
     #     await websocket.send(now)
@@ -83,7 +82,9 @@ def bytes_utf8_converter(content):
     return bytes(content, 'UTF-8')
 
 
-# Nested class for request processing
+# Nested class for request processing.  Will take the webpage API requests and convert them into responses.
+# If the request is a specific "known value", will process that command, otherwise it will attempt to find
+# a file in the `www` directory with the requested file name.
 class VamlHandler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200)
@@ -133,6 +134,7 @@ class VamlHandler(BaseHTTPRequestHandler):
         )
 
     def _get_episode_data(self, parameters):
+        # Returns the data about a specific episode
         self._forward_file(
             filename='../thesis_data/blocks/run_{run}/episode_{episode}.json'.format(
                 run=parameters['run_id'],
@@ -142,10 +144,11 @@ class VamlHandler(BaseHTTPRequestHandler):
         )
 
     def _get_other(self):
+        # Attempts to return the file with the requested name
         self._forward_file(filename=self.path)
 
     def do_GET(self):
-        # Known paths
+        # Known paths - if not known, will just get the file with the provided name
         known_paths = {
             '/': self._get_index,
             '/index.html': self._get_index,

@@ -2,7 +2,8 @@ import json
 import os
 import numpy as np
 
-
+# Loads the 25, 50, and 75 percentile data for rewards across all runs within a given group.
+# Then applies compression to keep data size down.
 def load_group_metrics(group_folder, compression):
     data = load_all_runs_field_numpy(group_folder, 'rewards', compression)
     percentiles = {
@@ -11,7 +12,7 @@ def load_group_metrics(group_folder, compression):
     }
     return percentiles
 
-
+# Loads all of the specified field values within a given group + run.
 def load_run_field(group_folder, run_id, field, compression):
     # Read files
     reward_data = load_all_episodes_field_numpy(group_folder, run_id, field)
@@ -20,7 +21,9 @@ def load_run_field(group_folder, run_id, field, compression):
 
 
 
-
+# Compresses the size of a number array by bucketizing values across their mean.
+# This is handled by reshaping the array with appropriate padding, using numpy
+# to reduce by mean, then re-solving the area that had padding.
 def compress_array(steps, compression):
     # Add padding so it is even (will be removed later)
     padding = (-len(steps)) % compression
@@ -80,7 +83,6 @@ def load_all_runs_field_numpy(group_folder, field, compression):
     # Convert into a volume of data
     combined = np.concatenate(data, axis=0)
     return combined
-
 
 
 def load_episode_field_numpy(group_folder, run_id, episode_id, field):
