@@ -49,7 +49,7 @@ function normalizeValues(values: number[]) {
 function generateMockPredictionData(): number[] {
   let mockData: number[] = []
   for (let idx = 0; idx < NUM_ACTIONS; idx++) {
-    mockData.push(Math.pow(Math.random(), 4))
+    mockData.push(Math.pow(Math.random(), 4) * 2)
   }
 
   // Boost a couple
@@ -1212,11 +1212,19 @@ class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
   sampleData: PredictionSampleStepData
+  private _header: any
   private _hoverText: HoverText
 
   constructor() {
     super(d3.select('#predictions'))
     this.size = new Size(100, 160)
+
+    // Add header
+    this._header = this.g.append('text')
+      .attr('x', this.size.width / 2)
+      .attr('y', -8)
+      .attr("text-anchor", "middle")
+      .text('Sample: None Selected')
 
     // Add a background
     this.g.insert('rect', 'g')
@@ -1270,6 +1278,8 @@ class PredictionMatrix extends ShapeRegion {
       let datum = [i, data.data[i]]
       this.squares[i].g.attr('fill', valueDomain(v)).datum(datum)
     })
+
+    this._header.text('Sample: ' + sample.name)
   }
 
   private hoverDisplay(index: number, value: number) {
@@ -1335,7 +1345,6 @@ function setSelectedSample(sample: string) {
 // [ ] Click on a point on the rewards graph to draw a cyan vertical line
     // [ ] Update predictions matrix accordingly
     // [ ] Also allow clicking on spectrograms to select a time
-// [ ] Show title of selection above confusion matrix
 
 // [ ] Have the contour metrics properly adapt for when runs are different lengths
 // [ ] Merge to master
