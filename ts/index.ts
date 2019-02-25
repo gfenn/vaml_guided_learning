@@ -1474,10 +1474,3 @@ function updateSelections() {
   let stepIndex = Math.min(Math.floor(SELECTED_STEP / DATA_COMPRESSION_PREDICTIONS), row.steps.length-1)
   PREDICTIONS.data(row.steps[stepIndex], sampleData.sample)
 }
-
-// ========================================================================
-// ========================================================================
-// ========================================================================
-// ========================================================================
-// [ ] Have the contour metrics properly adapt for when runs are different lengths
-// [ ] Merge to master
