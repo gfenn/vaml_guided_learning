@@ -1,4 +1,6 @@
+// Author: Grant Fennessy
 
+// - Constants -
 let RUNS_PER_GROUP = 3
 let DATA_COMPRESSION_LINES = 1000
 let DATA_COMPRESSION_SHAPE = 1000
@@ -13,15 +15,6 @@ let STEER_ACTIONS = 5
 let STEERING_VALUES = [-0.5, -0.1, 0, 0.1, 0.5]
 let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
 
-let GROUP_COLORS: {[key: string]: string} = {
-    'blocks': 'red',
-    'deeplab': 'lightgreen'
-}
-
-let FORMAL_NAME: {[key: string]: string} = {
-    'blocks': 'Blocks',
-    'deeplab': 'Deeplab'
-}
 
 
 
@@ -187,8 +180,9 @@ class PredictionSampleStepData {
   constructor(data: number[], correctness: number, labels: number[]) {
     this.data = data
 
-    let max = data.reduce((p, v) => v > p ? v : p, data[0])
-    this.dataNormalized = data.map(v => v / max)
+    // let max = data.reduce((p, v) => v > p ? v : p, data[0])
+    // this.dataNormalized = data.map(v => v / max)
+    this.dataNormalized = normalizeValues(data)
 
     // // Measure the correctness
     // let score = data.map((probability, index) => {
@@ -1006,7 +1000,7 @@ class RewardsGraph extends ShapeRegion {
     DATA.getRunField(group, 1, DATA_COMPRESSION_LINES, 'rewards')
       .then(runData => {
         runData.applyEwma(EWMA_BETA_LINES)
-        let line = this.addLine(runData.points, GROUP_COLORS[runData.group])
+        let line = this.addLine(runData.points, 'red')
         this._runLines.push(line)
       })
   }
@@ -1099,6 +1093,7 @@ class SpectrogramRow extends SimpleG {
 
 }
 
+// A single spectrogram, which has multiple rows (one for each run)
 class Spectrogram extends SimpleG {
 
   sample: PredictionSample
@@ -1200,6 +1195,7 @@ class Spectrogram extends SimpleG {
 
 }
 
+// Contains all of the set of spectrograms (one per sample)
 class SpectrogramsArea extends SimpleG {
 
   samples: PredictionSample[] = []
@@ -1268,6 +1264,8 @@ class SpectrogramsArea extends SimpleG {
 // =======================================================
 // =======================================================
 
+// Handles the text to the right of the prediction matrix which
+// shows up while hovering over grid cells.
 class HoverText {
   g: any
   valueText: any
@@ -1295,6 +1293,7 @@ class HoverText {
     this.hide()
   }
 
+  // Displays the prediction matrix values
   show(value: number, throttle: number, steering: number) {
     this.valueText.text('Value: ' + value + '%')
     this.throttleText.text('Throttle: ' + throttle)
@@ -1302,11 +1301,14 @@ class HoverText {
     this.g.attr('visibility', 'visible')
   }
 
+  // Hide this group
   hide() {
     this.g.attr('visibility', 'hidden')
   }
 }
 
+
+// Contains all information for the prediction matrix.
 class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
@@ -1334,30 +1336,30 @@ class PredictionMatrix extends ShapeRegion {
       .attr('width', this.size.width + 2)
       .attr('height', this.size.height + 2)
 
+    // Build the hover component and place it to the right of the graph
     let hoverG = this.g.append('g').attr('transform', 'translate(' + (this.size.width + 10) + ',' + (this.size.height / 2) + ')')
     this._hoverText = new HoverText(hoverG)
 
+    // Remove paddin gand clear axes
     this._boundingPadding = new Rectangle(0, 0, 0, 0)
     this._xAxis.removeTicks()
     this._xAxis.removeLine()
     this._xAxis.gText.text('Steering').attr('y', 15)
-
     this._yAxis.removeTicks()
     this._yAxis.removeLine()
     this._yAxis.gText.text('Throttle').attr('y', -10)
 
-    // Determine bands
+    // Determine bands and bandwidth for each cell
     let xDomain = d3.scaleLinear()
       .domain([0, STEER_ACTIONS])
       .range([0, this.size.width])
     let yDomain = d3.scaleLinear()
       .domain([0, THROTTLE_ACTIONS])
       .range([this.size.height, 0])
-
     let xBandwidth = xDomain(1)
     let yBandwidth = yDomain(THROTTLE_ACTIONS-1) - yDomain(THROTTLE_ACTIONS)
 
-    // 40 data points
+    // Insert all of the action cells (no data yet)
     for (let idx = 0; idx < NUM_ACTIONS; idx ++) {
       let xVal = xDomain(idx % STEER_ACTIONS)
       let yVal = yDomain(Math.floor(idx / STEER_ACTIONS))
@@ -1379,6 +1381,7 @@ class PredictionMatrix extends ShapeRegion {
     }
   }
 
+  // Inserts the data into the already generated squares
   data(data: PredictionSampleStepData, sample: PredictionSample) {
     this.sampleData = data
     this.sample = sample
@@ -1386,6 +1389,7 @@ class PredictionMatrix extends ShapeRegion {
     this._header.text('Sample: ' + sample.name)
   }
 
+  // Applies colors to the grid depending on mode (prediction or label)
   private _updateColors() {
     let valueMap: {[key: number]: any} = {}
     if (this._monoColors) {
@@ -1429,6 +1433,10 @@ class PredictionMatrix extends ShapeRegion {
 // =============================================
 // =============================================
 // =============================================
+// Here we'll build all of the graphs and place them on the page.  The data
+// is then loaded for the rewards graph and the spectrograms data.  All of
+// the update functions are then created, allowing page interactions to
+// directly influence the application state.
 
 // State values
 let SELECTED_STEP: number = 0
