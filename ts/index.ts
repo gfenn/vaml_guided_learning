@@ -69,6 +69,32 @@ function generateMockPredictionLabels(): number[] {
   return mockData
 }
 
+function roundToSigFigures(value: number, figures: number): number {
+  let e = Math.floor(Math.log(value) / Math.log(10)) + 1
+  if (e <= figures) {
+    return value
+  }
+  let reducer = Math.pow(10, e-figures)
+  return Math.round(value / reducer) * reducer
+
+}
+
+function formatStep(step: number): string {
+  let rounded = roundToSigFigures(step, 3)
+  if (rounded < 1000) {
+    return rounded + ''
+  }
+  let roundedK = rounded / 1000
+  if (roundedK < 1000) {
+    return roundedK + 'k'
+  }
+  let roundedM = roundedK / 1000
+  if (roundedM < 1000) {
+    return roundedM + 'M'
+  }
+  return (roundedM / 1000) + 'G'
+}
+
 class DataFieldI {
   group: string
   field: string
@@ -872,10 +898,11 @@ class RewardsGraph extends ShapeRegion {
   private _runLines: Line[] = []
 
   private _backgroundG: any
-  private _selectLine: any
+  private _selectionG: any
 
   constructor() {
     super(d3.select('#rewards-chart'))
+    this._boundingPadding.bottom = 0.1
 
     // Add background
     let self = this
@@ -885,12 +912,17 @@ class RewardsGraph extends ShapeRegion {
       .attr('height', this.size.height)
       .attr('fill', '#fbfbfb')
       .attr('stroke', 'lightgray')
-    this._selectLine = this._backgroundG
+    this._selectionG = this._backgroundG.append('g')
+    this._selectionG
       .append('line')
-      .attr('x1', 0)
-      .attr('x2', 0)
       .attr('y2', this.size.height)
       .attr('stroke', '#00b3b3')
+    this._selectionG
+      .append('text')
+      .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
+      .attr('font-size', 10)
+      .attr('fill', '#00b3b3')
+      .text('Step: 0')
 
     // Add foreground
     this.g.append('rect')
@@ -929,7 +961,22 @@ class RewardsGraph extends ShapeRegion {
 
   selectStep(step: number) {
     let x = this._xAxis.domain(step)
-    this._selectLine.attr('x1', x).attr('x2', x)
+    this._selectionG.attr('transform', 'translate(' + x + ', 0)')
+
+    let transformX
+    let anchor
+    if (x >= this.size.width / 2) {
+      transformX = -3
+      anchor = 'end'
+    }
+    else {
+      transformX = 3
+      anchor = 'begin'
+    }
+    this._selectionG.select('text')
+      .attr('transform', 'translate(' + transformX + ', ' + (this.size.height - 4) + ')')
+      .attr('text-anchor', anchor)
+      .text('Step: ' + formatStep(step))
   }
 
   loadCurveBoxplotData(group: string) {
