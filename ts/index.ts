@@ -19,7 +19,6 @@ let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
 
 
 
-
 // =============================================
 // =============================================
 // =============================================
@@ -28,6 +27,7 @@ let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
 // =============================================
 // =============================================
 
+// Convert the array into values between [0, 1]
 function normalizeValues(values: number[]) {
   // Adjust min so lowest value is 0
   let minVal = values.reduce((min, val) => val < min ? val : min, values[0])
@@ -39,6 +39,8 @@ function normalizeValues(values: number[]) {
   return values
 }
 
+// Generates pseudo-random data to populate the action predictions, including
+// applying softmax on the data.
 function generateMockPredictionData(): number[] {
   let mockData: number[] = []
   for (let idx = 0; idx < NUM_ACTIONS; idx++) {
@@ -54,6 +56,7 @@ function generateMockPredictionData(): number[] {
   return softmax
 }
 
+// Generates mock labels, assigning 0 (bad), 1 (neutral) or 2 (good) to each action index.
 function generateMockPredictionLabels(): number[] {
   let mockData: number[] = []
   for (let idx = 0; idx < 40; idx++) {
@@ -62,6 +65,7 @@ function generateMockPredictionLabels(): number[] {
   return mockData
 }
 
+// Rounds the value to the given number of significant figures.
 function roundToSigFigures(value: number, figures: number): number {
   let e = Math.floor(Math.log(value) / Math.log(10)) + 1
   if (e <= figures) {
@@ -72,6 +76,7 @@ function roundToSigFigures(value: number, figures: number): number {
 
 }
 
+// Formats the step number to be 3 significant figures + reduced by 1,000s
 function formatStep(step: number): string {
   let rounded = roundToSigFigures(step, 3)
   if (rounded < 1000) {
@@ -88,6 +93,9 @@ function formatStep(step: number): string {
   return (roundedM / 1000) + 'G'
 }
 
+// Interface for a generic data field - group specifies the group to which
+// this data belongs (set of experiments), and field is an identifier for
+// exactly which data is being stored (such as rewards data)
 class DataFieldI {
   group: string
   field: string
@@ -97,6 +105,7 @@ class DataFieldI {
   }
 }
 
+// Simple implementation which uses points to store information.
 class DataField extends DataFieldI {
   points: Point[]
   constructor(group: string, field: string, points: Point[]) {
@@ -104,6 +113,9 @@ class DataField extends DataFieldI {
     this.points = points
   }
 
+  // Applies exponentially weighted moving average on each of the points,
+  // smoothing out the Y values.  Important for results that would otherwise
+  // be very jagged.
   applyEwma(beta: number) {
     let ewma = this.points[0].y
     this.points.forEach(function(point: Point) {
@@ -113,6 +125,7 @@ class DataField extends DataFieldI {
   }
 }
 
+// Stores a data field for a specific experiment run
 class DataRunField extends DataField {
   run_id: number
   constructor(group: string, run_id: number, field: string, points: Point[]) {
@@ -121,6 +134,8 @@ class DataRunField extends DataField {
   }
 }
 
+// Contains multiple runs worth of a specific data field.  This is useful if
+// all of the runs in a group are being queried.
 class DataGroupRunFields extends DataFieldI {
     runs: DataRunField[]
     constructor(runs: DataRunField[]) {
@@ -133,18 +148,8 @@ class DataGroupRunFields extends DataFieldI {
     }
 }
 
-class DataMultipleGroupRunFields {
-  groups: {[key: string]: DataGroupRunFields} = {}
-  add(group: DataGroupRunFields) {
-    this.groups[group.group] = group
-    return this
-  }
-
-  applyEwma(beta: number) {
-    for (let key in this.groups) { this.groups[key].applyEwma(beta) }
-  }
-}
-
+// Holds percentile metrics across all runs for a specific field in a group.
+// Used for the curve boxplot of rewards values.
 class DataGroupMetrics extends DataFieldI {
   p25: DataField
   p50: DataField
@@ -156,12 +161,15 @@ class DataGroupMetrics extends DataFieldI {
     this.p75 = new DataField(group, 'p75', metrics['p75'])
   }
 
+  // Apply smoothing to all of the metrics
   applyEwma(beta: number) {
     this.p25.applyEwma(beta)
     this.p50.applyEwma(beta)
     this.p75.applyEwma(beta)
   }
 
+  // Extracts points which represent the shape with the top line of the 25th percentile
+  // and the bottom line (in reverse) being the 75th percentile.
   midlineShape(): Point[] {
     let points: Point[] = []
     points.push(...this.p25.points)
@@ -170,6 +178,7 @@ class DataGroupMetrics extends DataFieldI {
   }
 }
 
+// Stores all of the loaded data for the model's predictions at a specific step.
 class PredictionSampleStepData {
   // The 0-1 probability of the action being taken -> softmax result
   data: number[]
@@ -185,6 +194,7 @@ class PredictionSampleStepData {
     this.dataNormalized = normalizeValues(data)
 
     // // Measure the correctness
+    // TODO - when no longer using mock data, determine correctness score
     // let score = data.map((probability, index) => {
     //   // Label is 0 (wrong = 0 points), 1 (neutral = 0.5 points), or 2 (good = 1 point)
     //   return probability * (labels[index] / 3)
@@ -194,6 +204,7 @@ class PredictionSampleStepData {
   }
 }
 
+// The name of a sample, along with its user-defined labels (bad, neutral, or good)
 class PredictionSample {
   name: string
   labels: number[]
@@ -203,6 +214,7 @@ class PredictionSample {
   }
 }
 
+// For a given run, stores all of the prediction steps that took place.
 class PredictionSampleRowData {
   sample: PredictionSample
   run: number
@@ -214,6 +226,7 @@ class PredictionSampleRowData {
   }
 }
 
+// Stores all of the runs worth for a given sample within a group.
 class PredictionSampleData {
   sample: PredictionSample
   rows: PredictionSampleRowData[]
@@ -223,6 +236,8 @@ class PredictionSampleData {
   }
 }
 
+// Stores all sample data for a group, queriable based on sample.  Also stores
+// a unique list of samples.
 class PredictionGroupSampleData {
   dataBySample: {[key: string]: PredictionSampleData} = {}
   samples: PredictionSample[] = []
@@ -236,8 +251,12 @@ class PredictionGroupSampleData {
   }
 }
 
+// Class with several useful methods for collecting data from the server
+// by way of promises.  All server API calls take place here, and properly
+// formatted data is returned.
 class DataCollector {
 
+  // Converts an array of numbers into points, where the index is stored in the X value
   private _arrayToPoints(values: number[], compression: number): Point[] {
     let points: Point[] = []
     values.forEach((value, index) =>
@@ -245,6 +264,9 @@ class DataCollector {
     return points
   }
 
+  // For a given group and a given run, loads all values in the provided field
+  // (such as rewards).  Data is then compressed, where steps are bucketized
+  // by mean so as to reduce data requirements with millions of steps.
   async getRunField(group: string, run: number, compression: number, field: string): Promise<DataRunField> {
     let atp = this._arrayToPoints
     return fetch('data/run_field?group=' + group
@@ -260,8 +282,10 @@ class DataCollector {
         })
   }
 
+  // Returns the individual run data for all runs within a group
   async getAllRunFields(group: string, compression: number, field: string): Promise<DataGroupRunFields> {
     let promises = []
+    // TODO - query the metadata for that group to get the number of runs
     for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
       promises.push(this.getRunField(group, run_id, compression, field))
     }
@@ -271,22 +295,7 @@ class DataCollector {
       })
   }
 
-  async getAllGroupsField(groups: string[], compression: number, field: string): Promise<DataMultipleGroupRunFields> {
-    let promises = []
-    for (let group_id in groups) {
-      let group = groups[group_id]
-      promises.push(this.getAllRunFields(group, compression, field))
-    }
-    return Promise.all(promises)
-      .then(function(groups: DataGroupRunFields[]) {
-        let allGroups = new DataMultipleGroupRunFields()
-        for (let key in groups) {
-          allGroups.add(groups[key])
-        }
-        return allGroups
-      })
-  }
-
+  // Returns metrics for a group, which includes rewards percentiles.
   async getGroupMetrics(group: string, compression: number): Promise<DataGroupMetrics> {
     let atp = this._arrayToPoints
     return fetch('data/group_metrics?group=' + group
@@ -304,7 +313,9 @@ class DataCollector {
         })
   }
 
+  // Returns a list of all use-annotated samples
   async getAllSamples(): Promise<PredictionSample[]> {
+    // TODO -> have samples stored and return them with ththis query
     let samples = ["blocks", "deeplab", "nodsf", "linear"].map(sample => {
       return new PredictionSample(sample)
     })
@@ -313,6 +324,8 @@ class DataCollector {
     //     .then(function(response) { return response.json(); })
   }
 
+  // Returns the entire set of predictions for a sample within a group + run.
+  // Basically, how well did this experiment within the batch handle the given sample over training?
   // TODO - needs to eventually be something where you pass in specific runs
   async getSamplePredictionsForRun(
     group: string,
@@ -320,7 +333,7 @@ class DataCollector {
     sample: PredictionSample,
     compression: number
   ): Promise<PredictionSampleRowData> {
-    // SINCE THIS IS MOCK
+    // TODO - SINCE THIS IS MOCK
     group = sample.name
     return this.getRunField(group, run_id, compression, 'rewards')
       .then(data => {
@@ -334,6 +347,7 @@ class DataCollector {
       })
   }
 
+  // Within an experiment group, returns predictions for all runs.
   async getSamplePredictionsForGroupSample(
     group: string,
     sample: PredictionSample,
@@ -349,6 +363,7 @@ class DataCollector {
       })
   }
 
+  // Within an experiment group, returns data for all runs against all samples
   async getSamplePredictionsForGroup(
     group: string,
     compression: number
@@ -376,6 +391,7 @@ let DATA = new DataCollector()
 // =============================================
 // =============================================
 
+// A simple rectangle object
 class Rectangle {
   left: number;
   right: number;
@@ -401,6 +417,7 @@ class Rectangle {
 
 }
 
+// A simple point object for x and y position.
 class Point {
   x: number
   y: number
@@ -410,6 +427,7 @@ class Point {
   }
 }
 
+// A simple size object for width and height
 class Size {
   width: number
   height: number
@@ -419,6 +437,11 @@ class Size {
   }
 }
 
+// A simple shape to place within an SVG.  The type o fshape is not defined,
+// but it rests within a parent, has an X and Y axis available for scaling,
+// the data from the value domain into the pixel domain on the graph.
+// Keeps a bounding box up to date which wraps all contained data in the
+// value domain (not the pixel domain).
 class GraphShape {
   protected _parent: any
   protected _xAxis: XAxis
@@ -452,6 +475,8 @@ class GraphShape {
   rebuild() {}
 }
 
+// A graph shape that exists by way of a collection of points.  Since the points
+// define location, they can be used to automatically construct the bounding box.
 class GraphShapePointBased extends GraphShape {
   protected _points: Point[]
   constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
@@ -465,10 +490,10 @@ class GraphShapePointBased extends GraphShape {
   }
   get points(): Point[] { return this._points }
   get xValues(): number[] {
-    return this._points.map(function(p: Point) { return p.x })
+    return this._points.map(p => p.x)
   }
   get yValues(): number[] {
-    return this._points.map(function(p: Point) { return p.y })
+    return this._points.map(p => p.y)
   }
   protected _buildBoundingBox() {
     let xValues = this.xValues
@@ -482,6 +507,7 @@ class GraphShapePointBased extends GraphShape {
   }
 }
 
+// A simple line object, which connects a series of points.
 class Line extends GraphShapePointBased {
   constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
     super(parent, xAxis, yAxis, points)
@@ -505,6 +531,8 @@ class Line extends GraphShapePointBased {
   }
 }
 
+// A polygon object, which is a collection of points that defines the outline
+// of a polygonal shape.
 class Polygon extends GraphShapePointBased {
   constructor(parent: any, xAxis: XAxis, yAxis: YAxis, points: Point[]) {
     super(parent, xAxis, yAxis, points)
@@ -531,6 +559,7 @@ class Polygon extends GraphShapePointBased {
   }
 }
 
+// Objects that exist within a rectangle.
 class GraphShapeRectangleBased extends GraphShape {
   protected _rectangle: Rectangle
   constructor(parent: any, xAxis: XAxis, yAxis: YAxis, rectangle: Rectangle) {
@@ -545,6 +574,7 @@ class GraphShapeRectangleBased extends GraphShape {
   }
 }
 
+// A simple box/rectangle object.
 class Box extends GraphShapeRectangleBased {
   constructor(parent: any, xAxis: XAxis, yAxis: YAxis, rectangle: Rectangle) {
     super(parent, xAxis, yAxis, rectangle)
@@ -575,6 +605,8 @@ class Box extends GraphShapeRectangleBased {
 // =============================================
 // =============================================
 // =============================================
+// An X or Y axis for a graph.  Stores all info for converting data from
+// the value domain into the pixel domain (or in reverse).
 class LineGraphAxis {
   protected _chartSize: Size = new Size(2, 2)
   protected _dataRange: number[] = [1, 2]
@@ -656,6 +688,7 @@ class LineGraphAxis {
   }
 }
 
+// Y axis implementation.
 class YAxis extends LineGraphAxis {
 
   protected _axisPixelRange(): number[] {
@@ -691,6 +724,7 @@ class YAxis extends LineGraphAxis {
 
 }
 
+// X axis implementation
 class XAxis extends LineGraphAxis {
 
   private _top: boolean = false
@@ -762,7 +796,10 @@ class XAxis extends LineGraphAxis {
 // =============================================
 // =============================================
 // =============================================
-
+// An SVG region in which shapes can be placed.  Has an X and Y axis,
+// and automatically updates the graph internal size based on the bounding
+// box generated from all stored shapes.  A padding exists which automatically
+// adds a percentile buffer to the discovered bounding box size.
 class ShapeRegion {
   private _g: d3.Selection<SVGGElement, any, any, any>;
   private _size: Size = new Size(600, 200)
@@ -798,6 +835,7 @@ class ShapeRegion {
   }
   get size() { return this._size }
 
+  // Iterates all shapes to generates a bounding box that contains all of them.
   getAllBoundingBox(): Rectangle {
     let boxes: Rectangle[] = []
     for (let idx in this._shapes) {
@@ -817,6 +855,9 @@ class ShapeRegion {
     return new Rectangle(0, 1, 1, 0)
   }
 
+  // Updates all of the axes by rebuilding the bounding box, then setting the
+  // box range into the X and Y axes to update the domain conversion.  Each
+  // shape is then rebuilt so that it is positioned properly within the chart.
   updateAxes() {
     // Determine bounding boxe
     let box = this.getAllBoundingBox()
@@ -839,6 +880,7 @@ class ShapeRegion {
     }
   }
 
+  // Adds a line shape that is automatically positioned.
   addLine(points: Point[], color: string = 'red') {
     let line = new Line(this._gShapes, this._xAxis, this._yAxis, points)
     line.g.attr('stroke', color)
@@ -847,6 +889,7 @@ class ShapeRegion {
     return line
   }
 
+  // Adds a box shape that is automatically positioned.
   addBox(rectangle: Rectangle, fill: string = 'lightgray', stroke: string = 'black') {
     let box = new Box(this._gShapes, this._xAxis, this._yAxis, rectangle)
     box.g.attr('fill', fill)
@@ -856,6 +899,7 @@ class ShapeRegion {
     return box
   }
 
+  // Adds a polygon shape that is automatically positioned.
   addPolygon(points: Point[], fill: string = 'lightblue', stroke: string = 'blue') {
     let polygon = new Polygon(this._gShapes, this._xAxis, this._yAxis, points)
     polygon.g.attr('fill', fill)
@@ -865,6 +909,7 @@ class ShapeRegion {
     return polygon
   }
 
+  // Removes a shape and udpates the chart size.
   removeShape(shape: any) {
     this._shapes = this._shapes.filter(function(s: GraphShape) {
       return s != shape
@@ -884,7 +929,10 @@ class ShapeRegion {
 const CURVE_BOXPLOT_FILL = '#ffffff'
 const CURVE_BOXPLOT_LINE = 'lightgray'
 
-
+//  The rewards graph is a specific implementation of the ShapeRegion which
+// has all of the necessary components for the current run reward line, the
+// curve boxplot with metrics, the current selection line, and all interactive
+// components.
 class RewardsGraph extends ShapeRegion {
 
   private _curveBoxplotShape: Polygon
@@ -898,7 +946,8 @@ class RewardsGraph extends ShapeRegion {
     super(d3.select('#rewards-chart'))
     this._boundingPadding.bottom = 0.1
 
-    // Add background
+    // Add background, which has a slight color offset to make the white
+    // curve boxplot shape pop and to make the chart boundaries clear.
     let self = this
     this._backgroundG = this.g.insert('g', 'g')
     this._backgroundG.append('rect')
@@ -906,6 +955,8 @@ class RewardsGraph extends ShapeRegion {
       .attr('height', this.size.height)
       .attr('fill', '#fbfbfb')
       .attr('stroke', 'lightgray')
+
+    // The selection line goes on the background - might need to move this forward.
     this._selectionG = this._backgroundG.append('g')
     this._selectionG
       .append('line')
@@ -918,7 +969,7 @@ class RewardsGraph extends ShapeRegion {
       .attr('fill', '#00b3b3')
       .text('Step: 0')
 
-    // Add foreground
+    // Add foreground, which is invisible but listens for mouse clicks.
     this.g.append('rect')
       .attr('width', this.size.width)
       .attr('height', this.size.height)
@@ -938,6 +989,8 @@ class RewardsGraph extends ShapeRegion {
     this._xAxis.top = true
   }
 
+  // Builds a curve boxplot shape with filler data, then hides it.  Pre-building
+  // makes sure that it's placed in the correct order behind the line.
   private buildCurveBoxplotShape(): Polygon {
     let shape = this.addPolygon([new Point(0, 0), new Point(0, 1), new Point (1, 0)])
     shape.g
@@ -947,12 +1000,14 @@ class RewardsGraph extends ShapeRegion {
     return shape
   }
 
+  // Builds a fake centerline, then hides it so that ordering is set up correctly.
   private buildCurveBoxplotCenterline(): Line {
     let line = this.addLine([new Point(0, 0), new Point(1, 1)], CURVE_BOXPLOT_LINE)
     line.hide()
     return line
   }
 
+  // Selects a step, updating the selection line and text.
   selectStep(step: number) {
     let x = this._xAxis.domain(step)
     this._selectionG.attr('transform', 'translate(' + x + ', 0)')
@@ -973,6 +1028,7 @@ class RewardsGraph extends ShapeRegion {
       .text('Step: ' + formatStep(step))
   }
 
+  // Loads all of the metrics data for a given experiment group
   loadCurveBoxplotData(group: string) {
     DATA.getGroupMetrics(group, DATA_COMPRESSION_SHAPE)
       .then(metrics => {
@@ -991,6 +1047,9 @@ class RewardsGraph extends ShapeRegion {
       })
   }
 
+  // Loads all of the run lines for a given group.  NOTE - Right now it's
+  // actually just loading the first run.  Later this should be updated
+  // to let you pick the run within the experiment group.
   loadRunLines(group: string) {
     // Remove old lines
     this._runLines.forEach(line => line.g.remove())
@@ -1026,7 +1085,8 @@ class RewardsGraph extends ShapeRegion {
 // ===================================================
 // ===================================================
 // ===================================================
-
+// A simple container for an SVGGelement which presumably
+// has a shape or some useful object within it.
 class SimpleG {
 
   g: SVGGElement
@@ -1043,6 +1103,9 @@ class SimpleG {
 
 }
 
+// A spectrogram row is an SVGGElement which contains a small rectangle for
+// each cell within the row along the x-channel.  Cells are colored based
+// on their measured values (between 0 and 1).
 class SpectrogramRow extends SimpleG {
 
   values: number[] = []
