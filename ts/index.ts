@@ -1052,9 +1052,11 @@ class SimpleG {
 class SpectrogramRow extends SimpleG {
 
   values: number[] = []
+  xDomain: any
 
-  constructor(g: SVGGElement, width: number, height: number) {
+  constructor(g: SVGGElement, width: number, height: number, xDomain: any) {
     super(g, width, height)
+    this.xDomain = xDomain
   }
 
   private rebuild(values: number[]) {
@@ -1062,19 +1064,15 @@ class SpectrogramRow extends SimpleG {
       .selectAll('rect')
       .remove()
 
-    let xLoc = d3.scaleLinear()
-      .domain([0, values.length])
-      .range([0, this.width])
-
     // Create the boxes
     this.gSelection
       .selectAll('rect')
       .data(values)
       .enter()
       .append('rect')
-      .attr('x', (d, i) => xLoc(i))
+      .attr('x', (d, i) => this.xDomain(i))
       .attr('y', 0)
-      .attr('width', xLoc(1))
+      .attr('width', this.xDomain(1))
       .attr('height', this.height)
   }
 
@@ -1107,14 +1105,29 @@ class Spectrogram extends SimpleG {
   label: any
   rows: SpectrogramRow[] = []
   background: any
+  xDomain: any
 
   constructor(g: SVGGElement, width: number, height: number, sample: PredictionSample) {
     super(g, width, height)
     this.sample = sample
 
-    this.g.onmousedown = e => {
-      this.select()
-    }
+    // Determine x domain
+    this.xDomain = d3.scaleLinear()
+      .domain([0, 1])
+      .range([0, this.width])
+
+    let self = this
+    this.gSelection.on('mousedown', function() {
+      // Select the sample
+      self.select()
+
+      // Update the step
+      let coords = d3.mouse(this)
+      if (coords[0] > 0 && coords[0] <= self.width) {
+        let step = self.xDomain.invert(coords[0]) * DATA_COMPRESSION_PREDICTIONS
+        setSelectedStep(Math.round(step))
+      }
+    })
 
     this.label = this.gSelection
       .append('text')
@@ -1156,7 +1169,7 @@ class Spectrogram extends SimpleG {
         .attr('height', rowHeight)
         .attr('transform', 'translate(0, ' + verticalScale(index) + ')')
         .nodes()[0]
-      this.rows.push(new SpectrogramRow(rowG, this.width, rowHeight))
+      this.rows.push(new SpectrogramRow(rowG, this.width, rowHeight, this.xDomain))
     }
   }
 
@@ -1169,6 +1182,11 @@ class Spectrogram extends SimpleG {
   data(rows: PredictionSampleRowData[]) {
     // Check for a rebuild
     this.checkRebuild(rows.length)
+    let maxLength = rows
+      .map(r => r.steps.length)
+      .reduce((prev, curr) => curr > prev ? curr : prev, rows[0].steps.length)
+
+    this.xDomain.domain([0, maxLength])
 
     // Set the datavalues
     rows.forEach((row, index) => {
