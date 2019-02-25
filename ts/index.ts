@@ -861,8 +861,8 @@ class ShapeRegion {
 
 
 
-const CURVE_BOXPLOT_FILL = '#f5f5ff'
-const CURVE_BOXPLOT_LINE = '#dbdbff'
+const CURVE_BOXPLOT_FILL = '#ffffff'
+const CURVE_BOXPLOT_LINE = 'lightgray'
 
 
 class RewardsGraph extends ShapeRegion {
@@ -871,8 +871,38 @@ class RewardsGraph extends ShapeRegion {
   private _curveBoxplotCenterline: Line
   private _runLines: Line[] = []
 
+  private _backgroundG: any
+  private _selectLine: any
+
   constructor() {
     super(d3.select('#rewards-chart'))
+
+    // Add background
+    let self = this
+    this._backgroundG = this.g.insert('g', 'g')
+    this._backgroundG.append('rect')
+      .attr('width', this.size.width)
+      .attr('height', this.size.height)
+      .attr('fill', '#fbfbfb')
+      .attr('stroke', 'lightgray')
+    this._selectLine = this._backgroundG
+      .append('line')
+      .attr('x1', 0)
+      .attr('x2', 0)
+      .attr('y2', this.size.height)
+      .attr('stroke', '#00b3b3')
+
+    // Add foreground
+    this.g.append('rect')
+      .attr('width', this.size.width)
+      .attr('height', this.size.height)
+      .attr('fill', 'rgba(0,0,0,0)')
+      .on('mousedown', function() {
+        let coords = d3.mouse(this)
+        let step = self._xAxis.domain.invert(coords[0])
+        setSelectedStep(Math.round(step))
+      })
+
 
     // Add a polygon and hide it
     this._curveBoxplotShape = this.buildCurveBoxplotShape()
@@ -897,6 +927,10 @@ class RewardsGraph extends ShapeRegion {
     return line
   }
 
+  selectStep(step: number) {
+    let x = this._xAxis.domain(step)
+    this._selectLine.attr('x1', x).attr('x2', x)
+  }
 
   loadCurveBoxplotData(group: string) {
     DATA.getGroupMetrics(group, DATA_COMPRESSION_SHAPE)
@@ -1212,8 +1246,10 @@ class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
   sampleData: PredictionSampleStepData
+  sample: PredictionSample
   private _header: any
   private _hoverText: HoverText
+  private _monoColors: boolean = true
 
   constructor() {
     super(d3.select('#predictions'))
@@ -1266,20 +1302,45 @@ class PredictionMatrix extends ShapeRegion {
       box.g.attr('stroke', 'clear')
         .on('mouseover', (d: any) => { this.hoverDisplay(d[0], d[1]) })
         .on('mouseout', (v: any) => { this.stopHover() })
+        .on('mousedown', () => {
+          this._monoColors = false
+          this._updateColors()
+        })
+        .on('mouseup', () => {
+          this._monoColors = true
+          this._updateColors()
+        })
       this.squares.push(box)
     }
   }
 
   data(data: PredictionSampleStepData, sample: PredictionSample) {
     this.sampleData = data
-    let valueDomain = d3.scaleSequential(d3.interpolateBlues).domain([0, 1])
+    this.sample = sample
+    this._updateColors()
+    this._header.text('Sample: ' + sample.name)
+  }
+
+  private _updateColors() {
+    let valueMap: {[key: number]: any} = {}
+    if (this._monoColors) {
+      let map = d3.scaleSequential(d3.interpolateBlues).domain([0, 1])
+      valueMap[0] = map
+      valueMap[1] = map
+      valueMap[2] = map
+    } else {
+      valueMap[0] = function() { return 'red' }
+      valueMap[1] = function() { return 'yellow' }
+      valueMap[2] = function() { return 'green' }
+    }
+
+    let data = this.sampleData
     data.dataNormalized.forEach((v, i) => {
       // let color = colors[sample.labels[i]]
       let datum = [i, data.data[i]]
-      this.squares[i].g.attr('fill', valueDomain(v)).datum(datum)
+      let label = this.sample.labels[i]
+      this.squares[i].g.attr('fill', valueMap[label](v)).datum(datum)
     })
-
-    this._header.text('Sample: ' + sample.name)
   }
 
   private hoverDisplay(index: number, value: number) {
@@ -1333,18 +1394,25 @@ DATA.getSamplePredictionsForGroup('blocks', DATA_COMPRESSION_PREDICTIONS)
 function setSelectedSample(sample: string) {
   if (sample == SELECTED_SAMPLE) return
   SELECTED_SAMPLE = sample
-  let sampleData = STORED_DATA.dataBySample[sample]
-  PREDICTIONS.data(sampleData.rows[RUNS_PER_GROUP-1].steps[SELECTED_STEP], sampleData.sample)
+  updateSelections()
 }
 
+function setSelectedStep(step: number) {
+  SELECTED_STEP = step
+  REWARDS_GRAPH.selectStep(step)
+  updateSelections()
+}
+
+function updateSelections() {
+  let sampleData = STORED_DATA.dataBySample[SELECTED_SAMPLE]
+  let row = sampleData.rows[RUNS_PER_GROUP-1]
+  let stepIndex = Math.min(Math.floor(SELECTED_STEP / DATA_COMPRESSION_PREDICTIONS), row.steps.length-1)
+  PREDICTIONS.data(row.steps[stepIndex], sampleData.sample)
+}
 
 // ========================================================================
 // ========================================================================
 // ========================================================================
 // ========================================================================
-// [ ] Click on a point on the rewards graph to draw a cyan vertical line
-    // [ ] Update predictions matrix accordingly
-    // [ ] Also allow clicking on spectrograms to select a time
-
 // [ ] Have the contour metrics properly adapt for when runs are different lengths
 // [ ] Merge to master
