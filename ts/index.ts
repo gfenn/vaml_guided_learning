@@ -10,6 +10,9 @@ let NUM_ACTIONS = 40
 let THROTTLE_ACTIONS = 8
 let STEER_ACTIONS = 5
 
+let STEERING_VALUES = [-0.5, -0.1, 0, 0.1, 0.5]
+let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
+
 let GROUP_COLORS: {[key: string]: string} = {
     'blocks': 'red',
     'deeplab': 'lightgreen'
@@ -45,11 +48,17 @@ function normalizeValues(values: number[]) {
 
 function generateMockPredictionData(): number[] {
   let mockData: number[] = []
-  for (let idx = 0; idx < 40; idx++) {
-    mockData.push(Math.random())
+  for (let idx = 0; idx < NUM_ACTIONS; idx++) {
+    mockData.push(Math.pow(Math.random(), 4))
   }
+
+  // Boost a couple
+  mockData[Math.floor(Math.random() * NUM_ACTIONS)] += 0.3
+  mockData[Math.floor(Math.random() * NUM_ACTIONS)] += 0.6
+
   let total = mockData.reduce((p, value) => p + Math.exp(value), 0)
-  return mockData.map(v => Math.exp(v) / total)
+  let softmax = mockData.map(v => Math.exp(v) / total)
+  return softmax
 }
 
 function generateMockPredictionLabels(): number[] {
@@ -151,7 +160,9 @@ class PredictionSampleStepData {
   correctness: number
   constructor(data: number[], correctness: number, labels: number[]) {
     this.data = data
-    this.dataNormalized = normalizeValues(data)
+
+    let max = data.reduce((p, v) => v > p ? v : p, data[0])
+    this.dataNormalized = data.map(v => v / max)
 
     // // Measure the correctness
     // let score = data.map((probability, index) => {
@@ -1158,11 +1169,50 @@ class SpectrogramsArea extends SimpleG {
 // =======================================================
 // =======================================================
 
+class HoverText {
+  g: any
+  valueText: any
+  throttleText: any
+  steerText: any
+  constructor(g: any) {
+    this.g = g
+    this.valueText = g
+      .append('text')
+      .attr('y', -12)
+      .attr('font-size', 10)
+      .text('Value')
+
+    this.throttleText = g
+      .append('text')
+      .attr('font-size', 10)
+      .text('Throttle')
+
+    this.steerText = g
+      .append('text')
+      .attr('y', 12)
+      .attr('font-size', 10)
+      .text('Steering')
+
+    this.hide()
+  }
+
+  show(value: number, throttle: number, steering: number) {
+    this.valueText.text('Value: ' + value + '%')
+    this.throttleText.text('Throttle: ' + throttle)
+    this.steerText.text('Steer: ' + steering)
+    this.g.attr('visibility', 'visible')
+  }
+
+  hide() {
+    this.g.attr('visibility', 'hidden')
+  }
+}
+
 class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
-  private _hoverValue: any
   sampleData: PredictionSampleStepData
+  private _hoverText: HoverText
 
   constructor() {
     super(d3.select('#predictions'))
@@ -1175,12 +1225,8 @@ class PredictionMatrix extends ShapeRegion {
       .attr('width', this.size.width + 2)
       .attr('height', this.size.height + 2)
 
-    this._hoverValue = this.g.append('text')
-      .attr('x', this.size.width + 10)
-      .attr('y', this.size.height / 2)
-      .attr('font-size', 10)
-      .text('Value: 0')
-      .attr('fill', 'white')
+    let hoverG = this.g.append('g').attr('transform', 'translate(' + (this.size.width + 10) + ',' + (this.size.height / 2) + ')')
+    this._hoverText = new HoverText(hoverG)
 
     this._boundingPadding = new Rectangle(0, 0, 0, 0)
     this._xAxis.removeTicks()
@@ -1210,7 +1256,7 @@ class PredictionMatrix extends ShapeRegion {
       // Square
       let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
       box.g.attr('stroke', 'clear')
-        .on('mouseover', (v: any) => { this.hoverDisplay(v) })
+        .on('mouseover', (d: any) => { this.hoverDisplay(d[0], d[1]) })
         .on('mouseout', (v: any) => { this.stopHover() })
       this.squares.push(box)
     }
@@ -1221,19 +1267,20 @@ class PredictionMatrix extends ShapeRegion {
     let valueDomain = d3.scaleSequential(d3.interpolateBlues).domain([0, 1])
     data.dataNormalized.forEach((v, i) => {
       // let color = colors[sample.labels[i]]
-      this.squares[i].g.attr('fill', valueDomain(v)).datum(data.data[i])
+      let datum = [i, data.data[i]]
+      this.squares[i].g.attr('fill', valueDomain(v)).datum(datum)
     })
   }
 
-  private hoverDisplay(data: any) {
-    let value = Math.round(data * 1000) / 1000
-    this._hoverValue
-      .text('Value: ' + value)
-      .attr('fill', 'black')
+  private hoverDisplay(index: number, value: number) {
+    value = Math.round(value * 1000) / 10
+    let throttle = THROTTLE_VALUES[Math.floor(index / STEER_ACTIONS)]
+    let steering = STEERING_VALUES[index % STEER_ACTIONS]
+    this._hoverText.show(value, throttle, steering)
   }
 
   private stopHover() {
-    this._hoverValue.attr('fill', 'white')
+    this._hoverText.hide()
   }
 
 }
@@ -1289,7 +1336,6 @@ function setSelectedSample(sample: string) {
     // [ ] Update predictions matrix accordingly
     // [ ] Also allow clicking on spectrograms to select a time
 // [ ] Show title of selection above confusion matrix
-// [ ] Hover over confusion matrix square to show the value?
 
 // [ ] Have the contour metrics properly adapt for when runs are different lengths
 // [ ] Merge to master
