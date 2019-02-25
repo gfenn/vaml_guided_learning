@@ -16,10 +16,10 @@ svg
 {
   stroke: lightgray;
   stroke-width: 1;
-  fill: rgb(247, 247, 247);
+  fill: black;
 }
 
 .spectrogramBackground.selected {
-  stroke: #00bcd4;
-  stroke-width: 2;
+  stroke: black;
+  stroke-width: 6;
 }
