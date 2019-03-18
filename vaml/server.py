@@ -9,10 +9,10 @@ import websockets
 from http.server import HTTPServer
 from http.server import BaseHTTPRequestHandler
 
-from vaml.data_utils import load_run_field, load_group_metrics
+from vaml.data_utils import load_run_field, load_metrics
 
 SERVER = None
-
+FOLDER = '../thesis_data'
 
 def read_file(filename, root='www/'):
     with open('{root}{file}'.format(root=root, file=filename), 'rb') as f:
@@ -99,11 +99,11 @@ class VamlHandler(BaseHTTPRequestHandler):
             converter=converter
         )
 
-    def _get_group_metrics(self, parameters):
+    def _get_metrics(self, parameters):
         self._send_simple(
             content_type='application/json',
-            content=json.dumps(load_group_metrics(
-                group_folder='../thesis_data/{group}'.format(group=parameters['group']),
+            content=json.dumps(load_metrics(
+                folder=FOLDER,
                 compression=int(parameters['compression'])
             )),
             converter=bytes_utf8_converter
@@ -111,7 +111,8 @@ class VamlHandler(BaseHTTPRequestHandler):
 
     def _get_run_metadata(self, parameters):
         self._forward_file(
-            filename='../thesis_data/blocks/run_{id}/metadata.json'.format(
+            filename='{folder}/run_{id}/metadata.json'.format(
+                folder=FOLDER,
                 id=parameters['id']
             ),
             root=''
@@ -120,7 +121,7 @@ class VamlHandler(BaseHTTPRequestHandler):
     def _get_run_field(self, parameters):
         # Load the data
         data = load_run_field(
-            group_folder='../thesis_data/{group}'.format(group=parameters['group']),
+            folder=FOLDER,
             run_id=parameters['run'],
             compression=int(parameters['compression']),
             field=parameters['field']
@@ -136,7 +137,8 @@ class VamlHandler(BaseHTTPRequestHandler):
     def _get_episode_data(self, parameters):
         # Returns the data about a specific episode
         self._forward_file(
-            filename='../thesis_data/blocks/run_{run}/episode_{episode}.json'.format(
+            filename='{folder}/run_{run}/episode_{episode}.json'.format(
+                folder=FOLDER,
                 run=parameters['run_id'],
                 episode=parameters['id']
             ),
@@ -152,7 +154,7 @@ class VamlHandler(BaseHTTPRequestHandler):
         known_paths = {
             '/': self._get_index,
             '/index.html': self._get_index,
-            '/data/group_metrics': self._get_group_metrics,
+            '/data/metrics': self._get_metrics,
             '/data/run': self._get_run_metadata,
             '/data/run_field': self._get_run_field,
             '/data/episode': self._get_episode_data
