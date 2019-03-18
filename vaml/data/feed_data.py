@@ -1,0 +1,119 @@
+
+import os
+import json
+import numpy as np
+from shutil import copyfile
+
+
+RUN_METADATA_FORMAT = '{folder}/run_{id}_metadata.json'
+RUN_REWARDS_FORMAT = '{folder}/run_{id}_rewards.npy'
+EP_METADATA_FORMAT = '{folder}/episode_{id}_metadata.json'
+EP_REWARDS_FORMAT = '{folder}/episode_{id}_rewards.npy'
+
+
+class DataFeeder:
+
+    def __init__(self, src_folder, dst_folder, new_run_id):
+        self.src_folder = src_folder
+        self.dst_folder = dst_folder
+        self.run_id = new_run_id
+        self.episode_id = 1
+        self.step_count = 0
+        self.data = None
+
+    def _load_episode_metadata(self):
+        filename = EP_METADATA_FORMAT.format(
+            folder=self.src_folder,
+            id=self.episode_id
+        )
+        with open(filename) as fh:
+            metadata = json.load(fh)
+
+        metadata['run'] = self.run_id
+        return metadata
+
+    def _save_episode_metadata(self, metadata):
+        filename = EP_METADATA_FORMAT.format(
+            folder=self.dst_folder,
+            id=self.episode_id
+        )
+        with open(filename) as fh:
+            json.dump(metadata, fh)
+
+    def _load_episode_rewards(self):
+        filename = EP_REWARDS_FORMAT.format(
+            folder=self.src_folder,
+            id=self.episode_id
+        )
+        return np.load(filename)
+
+    def _save_episode_rewards(self, rewards):
+        filename = EP_REWARDS_FORMAT.format(
+            folder=self.src_folder,
+            id=self.episode_id
+        )
+        np.save(filename, rewards)
+
+    def _copy_run_metadata(self):
+        copyfile(
+            src=RUN_METADATA_FORMAT.format(folder=self.src_folder, id=self.run_id),
+            dst=RUN_METADATA_FORMAT.format(folder=self.dst_folder, id=self.run_id),
+        )
+
+    def _save_run_metadata(self):
+        pass
+
+    def _episode_iterator(self):
+        while True:
+            try:
+                metadata = self._load_episode_metadata()
+                rewards = self._load_episode_rewards()
+                yield metadata, rewards
+                self.episode_id += 1
+            except:
+                break
+
+    def feed(self, ep_delay):
+        # Process all episodes
+        for metadata, rewards in self._episode_iterator():
+            self._save_episode_metadata(metadata)
+            self._save_episode_rewards(rewards)
+            if ep_delay is not None:
+                # Append to current data
+                self._save_run_metadata()
+                # Sleep
+                pass
+
+        # Save the run data if not already
+        if ep_delay is None:
+            self._copy_run_metadata()
+
+
+def _determine_next_run_id(data_folder):
+    highest_id = 0
+    for folder in os.listdir(data_folder):
+        try:
+            run_number = int(folder.split('_')[1])
+            highest_id = max(highest_id, run_number)
+        except:
+            pass
+    return highest_id + 1
+
+
+def feed_folder(data_folder, feed_run, ep_delay):
+    # First we need to determine the next run id
+    next_run_id = _determine_next_run_id(data_folder)
+    src_folder = '{data_folder}/TOO_FEED/run_{feed_run}'.format(
+        data_folder=data_folder,
+        feed_run=feed_run
+    )
+    dst_folder = '{data_folder}/run_{run_id}'.format(
+        data_folder=data_folder,
+        run_id=next_run_id
+    )
+
+    # Make the dst folder
+    os.mkdir(dst_folder)
+
+    # Create and run
+    DataFeeder(src_folder, dst_folder, next_run_id).feed(ep_delay)
