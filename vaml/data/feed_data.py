@@ -1,6 +1,7 @@
 
 import os
 import json
+import time
 import numpy as np
 from shutil import copyfile
 
@@ -61,7 +62,14 @@ class DataFeeder:
         copyfile(src, dst)
 
     def _save_run_metadata(self):
-        pass
+        dst = RUN_METADATA_FORMAT.format(folder=self.dst_folder, id=self.run_id)
+        meta = {
+            'episodes': self.episode_id,
+            'total_reward': np.sum(self.data),
+            'total_steps': self.data.size
+        }
+        with open(dst, 'w') as fh:
+            json.dump(meta, fh)
 
     def _copy_run_rewards(self):
         src = RUN_REWARDS_FORMAT.format(folder=self.src_folder, id=self.old_run_id)
@@ -69,7 +77,8 @@ class DataFeeder:
         copyfile(src, dst)
 
     def _save_run_rewards(self):
-        pass
+        dst = RUN_REWARDS_FORMAT.format(folder=self.dst_folder, id=self.run_id)
+        np.save(dst, self.data)
 
     def _episode_iterator(self):
         while True:
@@ -84,14 +93,21 @@ class DataFeeder:
     def feed(self, ep_delay):
         # Process all episodes
         for metadata, rewards in self._episode_iterator():
+            print("Converting episode " + str(self.episode_id))
             self._save_episode_metadata(metadata)
             self._save_episode_rewards(rewards)
             if ep_delay is not None:
                 # Append to current data
+                if self.data is None:
+                    self.data = rewards
+                else:
+                    self.data = np.concatenate((self.data, rewards))
+
+                # Save run-level info
                 self._save_run_metadata()
                 self._save_run_rewards()
                 # Sleep
-                pass
+                time.sleep(ep_delay)
 
         # Save the run data if not already
         if ep_delay is None:
@@ -130,4 +146,4 @@ def feed_folder(data_folder, feed_run, ep_delay):
 
 
 if __name__ == '__main__':
-    feed_folder('../../../thesis_data', 12, None)
+    feed_folder(data_folder='../../../thesis_data', feed_run=1, ep_delay=0.05)
