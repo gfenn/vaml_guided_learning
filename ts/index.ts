@@ -1516,7 +1516,7 @@ DATA.getSampleDataRepo(DATA_COMPRESSION_PREDICTIONS)
 
     // Spectrograms
     SPECTROGRAMS.data(data)
-    SPECTROGRAMS.spectrogramsMap['blocks'].select()
+    SPECTROGRAMS.spectrogramsMap['Left'].select()
   })
 
 function setSelectedSample(sample: string) {
