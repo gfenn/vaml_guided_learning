@@ -294,6 +294,11 @@ class DataCollector {
       })
   }
 
+  async resetCurrent(): Promise<void> {
+    return fetch('data/reset')
+      .then(function(response) { return response.json(); })
+  }
+
   // Returns metrics, which includes rewards percentiles.
   async getMetrics(compression: number): Promise<DataMetrics> {
     let atp = this._arrayToPoints
@@ -1534,6 +1539,7 @@ class PredictionMatrix extends ShapeRegion {
 let SELECTED_STEP: number = 0
 let SELECTED_SAMPLE: string = ''
 let IS_MANUAL_SELECTION: boolean = false
+let UPDATE_ON: boolean = false
 
 // Build the components first
 let REWARDS_GRAPH = new RewardsGraph()
@@ -1601,13 +1607,36 @@ function updateSelections() {
 }
 
 function fireCurrentUpdateQuery() {
-  console.log("Updating current line...")
   loadSpectrogramData()
     .then(() => {
       REWARDS_GRAPH.loadRunLine()
     })
 }
 
+function setUpdatesEnabled(enabled: boolean) {
+  if (!enabled) {
+    UPDATE_ON = false
+    d3.select('#stop').text('Start')
+  } else {
+    UPDATE_ON = true
+    d3.select('#stop').text('Stop')
+  }
+}
+
+d3.select('#reset').on('mousedown', () => {
+  setUpdatesEnabled(true)
+  DATA.resetCurrent()
+    .then(() => {
+      fireCurrentUpdateQuery()
+    })
+})
+
+d3.select('#stop').on('mousedown', () => {
+  setUpdatesEnabled(!UPDATE_ON)
+})
+
 setInterval(function() {
-  fireCurrentUpdateQuery()
+  if (UPDATE_ON) {
+    fireCurrentUpdateQuery()
+  }
 }, 5000)

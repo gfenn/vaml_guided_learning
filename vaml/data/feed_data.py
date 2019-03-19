@@ -3,7 +3,7 @@ import os
 import json
 import time
 import numpy as np
-from shutil import copyfile
+from shutil import copyfile, rmtree
 
 
 RUN_METADATA_FORMAT = '{folder}/run_{id}_metadata.json'
@@ -115,7 +115,7 @@ class DataFeeder:
             self._copy_run_rewards()
 
 
-def _determine_next_run_id(data_folder):
+def _highest_run_id(data_folder):
     highest_id = 0
     for folder in os.listdir(data_folder):
         try:
@@ -123,12 +123,21 @@ def _determine_next_run_id(data_folder):
             highest_id = max(highest_id, run_number)
         except:
             pass
-    return highest_id + 1
+    return highest_id
 
 
-def feed_folder(data_folder, feed_run, ep_delay):
+def feed_folder(data_folder, feed_run, ep_delay, del_last=False):
     # First we need to determine the next run id
-    next_run_id = _determine_next_run_id(data_folder)
+    highest_run_id = _highest_run_id(data_folder)
+    if del_last:
+        next_run_id = highest_run_id
+        rmtree('{data_folder}/run_{run_id}'.format(
+            data_folder=data_folder,
+            run_id=next_run_id
+        ))
+    else:
+        next_run_id = highest_run_id + 1
+
     src_folder = '{data_folder}/TOO_FEED/run_{feed_run}'.format(
         data_folder=data_folder,
         feed_run=feed_run

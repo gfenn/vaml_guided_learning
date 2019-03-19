@@ -9,10 +9,12 @@ import websockets
 from http.server import HTTPServer
 from http.server import BaseHTTPRequestHandler
 
+from vaml.data.feed_data import feed_folder
 from vaml.data_utils import load_run_field, load_metrics
 
 SERVER = None
 FOLDER = '../thesis_data'
+TRANSFER_THREAD = None
 
 def read_file(filename, root='www/'):
     with open('{root}{file}'.format(root=root, file=filename), 'rb') as f:
@@ -30,6 +32,13 @@ def parse_request_path(request_path):
             parts = token.split('=', 1)
             params[parts[0]] = parts[1]
     return path, params
+
+
+def transfer_thread():
+    global TRANSFER_THREAD
+    TRANSFER_THREAD = True
+    feed_folder(data_folder=FOLDER, feed_run=6, ep_delay=0.1, del_last=True)
+    TRANSFER_THREAD = None
 
 
 class VamlServer:
@@ -145,6 +154,17 @@ class VamlHandler(BaseHTTPRequestHandler):
             root=''
         )
 
+    def _reset_thread(self, parameters):
+        global TRANSFER_THREAD
+        if TRANSFER_THREAD is None:
+            print("Launching transfer thread.")
+            threading.Thread(target=transfer_thread).start()
+        else:
+            print("Transfer thread already running.")
+
+        time.sleep(1)
+        self._send_ok()
+
     def _get_other(self):
         # Attempts to return the file with the requested name
         self._forward_file(filename=self.path)
@@ -157,7 +177,8 @@ class VamlHandler(BaseHTTPRequestHandler):
             '/data/metrics': self._get_metrics,
             '/data/run': self._get_run_metadata,
             '/data/run_field': self._get_run_field,
-            '/data/episode': self._get_episode_data
+            '/data/episode': self._get_episode_data,
+            '/data/reset': self._reset_thread,
         }
 
         # Split out the parameters (if any)
@@ -206,3 +227,6 @@ class VamlHandler(BaseHTTPRequestHandler):
         if converter is not None:
             content = converter(content)
         self.wfile.write(content)
+
+    def _send_ok(self):
+        self._send_simple(status_code=200, content_type='application/json', content='{}')
