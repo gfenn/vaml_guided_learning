@@ -2,7 +2,9 @@
 
 // - Constants -
 // TODO: DELETE THIS
-let RUNS_PER_GROUP = 3
+let ALL_RUN_COUNT = 6
+let FINISHED_RUN_COUNT = 5
+let CURRENT_RUN_ID = 6
 let DATA_COMPRESSION_LINES = 1000
 let DATA_COMPRESSION_SHAPE = 1000
 let DATA_COMPRESSION_PREDICTIONS = 10000
@@ -283,7 +285,7 @@ class DataCollector {
     let promises = []
     console.error("Need to determine number of runs")
     // TODO - query to get number of groups
-    for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
+    for (let run_id = 1; run_id <= ALL_RUN_COUNT; run_id++) {
       promises.push(this.getRunField(run_id, compression, field))
     }
     return Promise.all(promises)
@@ -347,12 +349,15 @@ class DataCollector {
     compression: number
   ): Promise<PredictionsAllRuns> {
     let promises: Promise<PredictionsForRun>[] = []
-    for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
+    for (let run_id = 1; run_id <= ALL_RUN_COUNT; run_id++) {
       promises.push(this.getPredictionsForRun(run_id, sample, compression))
     }
     return Promise.all(promises)
       .then(values => {
-        return new PredictionsAllRuns(sample, values)
+        let filtered = values.filter(it => {
+          return it.predictions.length > 0
+        })
+        return new PredictionsAllRuns(sample, filtered)
       })
   }
 
@@ -365,7 +370,14 @@ class DataCollector {
       samples.forEach(sample => {
         promises.push(this.getSamplePredictionsAllRuns(sample, compression))
       })
-      return Promise.all(promises).then(values => new SampleDataRepo(values))
+      return Promise
+        .all(promises)
+        .then(values => {
+          let filtered = values.filter(it => {
+            return it.runs.length > 0
+          })
+          return new SampleDataRepo(filtered)
+        })
     })
   }
 
@@ -1022,7 +1034,7 @@ class RewardsGraph extends ShapeRegion {
 
   // Loads all of the metrics data
   loadCurveBoxplotData() {
-    DATA.getMetrics(DATA_COMPRESSION_SHAPE)
+    return DATA.getMetrics(DATA_COMPRESSION_SHAPE)
       .then(metrics => {
         metrics.applyEwma(EWMA_BETA_SHAPE)
 
@@ -1042,18 +1054,37 @@ class RewardsGraph extends ShapeRegion {
   // Loads all of the run lines.  NOTE - Right now it's
   // actually just loading the first run.  Later this should be updated
   // to show the current run
-  loadRunLines() {
-    // Remove old lines
-    this._runLines.forEach(line => line.g.remove())
-    this._runLines = []
-
+  loadRunLine() {
     // Add lines
-    DATA.getRunField(1, DATA_COMPRESSION_LINES, 'rewards')
+    DATA.getRunField(CURRENT_RUN_ID, DATA_COMPRESSION_LINES, 'rewards')
       .then(runData => {
+        // Empty?
+        if (runData.points.length == 0) return
+
+        // Apply
         runData.applyEwma(EWMA_BETA_LINES)
-        let line = this.addLine(runData.points, 'red')
-        this._runLines.push(line)
+        if (this._runLines.length == 0) {
+          let line = this.addLine(runData.points, 'red')
+          this._runLines.push(line)
+        }
+        else {
+          this._runLines[0].points = runData.points
+          this._runLines[0].rebuild()
+        }
       })
+      .then(() => {
+        // If automatic selection, select last step
+        if (!IS_MANUAL_SELECTION) {
+          setSelectedStep(-1, false)
+        }
+      })
+  }
+
+  lastStep() {
+    if (this._runLines.length > 0) {
+      return this._runLines[0].points.length
+    }
+    return 0
   }
 
 }
@@ -1422,7 +1453,11 @@ class PredictionMatrix extends ShapeRegion {
       // Square
       let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
       box.g.attr('stroke', 'clear')
-        .on('mouseover', (d: any) => { this.hoverDisplay(d[0], d[1]) })
+        .on('mouseover', (d: any) => {
+          if (d != null) {
+            this.hoverDisplay(d[0], d[1])
+          }
+        })
         .on('mouseout', (v: any) => { this.stopHover() })
         .on('mousedown', () => {
           this._monoColors = false
@@ -1459,12 +1494,14 @@ class PredictionMatrix extends ShapeRegion {
     }
 
     let prediction = this.prediction
-    prediction.dataNormalized.forEach((v, i) => {
-      // let color = colors[sample.labels[i]]
-      let datum = [i, prediction.data[i]]
-      let label = this.sample.labels[i]
-      this.squares[i].g.attr('fill', valueMap[label](v)).datum(datum)
-    })
+    if (prediction != null) {
+      prediction.dataNormalized.forEach((v, i) => {
+        // let color = colors[sample.labels[i]]
+        let datum = [i, prediction.data[i]]
+        let label = this.sample.labels[i]
+        this.squares[i].g.attr('fill', valueMap[label](v)).datum(datum)
+      })
+    }
   }
 
   private hoverDisplay(index: number, value: number) {
@@ -1496,28 +1533,33 @@ class PredictionMatrix extends ShapeRegion {
 // State values
 let SELECTED_STEP: number = 0
 let SELECTED_SAMPLE: string = ''
+let IS_MANUAL_SELECTION: boolean = false
 
 // Build the components first
 let REWARDS_GRAPH = new RewardsGraph()
 let SPECTROGRAMS = new SpectrogramsArea()
 let PREDICTIONS = new PredictionMatrix()
+let STORED_DATA: SampleDataRepo
 
 // Populate the rewards
 REWARDS_GRAPH.loadCurveBoxplotData()
-REWARDS_GRAPH.loadRunLines()
-
-let STORED_DATA: SampleDataRepo
+  .then(() => {
+    fireCurrentUpdateQuery()
+  })
 
 // Populate the spectrogram area + predictions matrix
-DATA.getSampleDataRepo(DATA_COMPRESSION_PREDICTIONS)
-  .then(data => {
-    // Save the data
-    STORED_DATA = data
 
-    // Spectrograms
-    SPECTROGRAMS.data(data)
-    SPECTROGRAMS.spectrogramsMap['Left'].select()
-  })
+function loadSpectrogramData() {
+  return DATA.getSampleDataRepo(DATA_COMPRESSION_PREDICTIONS)
+    .then(data => {
+      // Save the data
+      STORED_DATA = data
+
+      // Spectrograms
+      SPECTROGRAMS.data(data)
+      SPECTROGRAMS.spectrogramsMap['Left'].select()
+    })
+}
 
 function setSelectedSample(sample: string) {
   if (sample == SELECTED_SAMPLE) return
@@ -1525,15 +1567,47 @@ function setSelectedSample(sample: string) {
   updateSelections()
 }
 
-function setSelectedStep(step: number) {
+function setSelectedStep(step: number = -1, manual: boolean = true) {
+  // Double click?
+  let last = REWARDS_GRAPH.lastStep() * DATA_COMPRESSION_LINES
+  if (IS_MANUAL_SELECTION && manual && step == SELECTED_STEP) {
+    manual = true
+    step = -1
+  }
+  if (step == -1) {
+    step = last
+  }
+  if (step > last) {
+    step = last
+    manual = false
+  }
+
+  // Select
+  IS_MANUAL_SELECTION = manual
   SELECTED_STEP = step
   REWARDS_GRAPH.selectStep(step)
   updateSelections()
 }
 
 function updateSelections() {
-  let sampleData = STORED_DATA.map[SELECTED_SAMPLE]
-  let row = sampleData.runs[RUNS_PER_GROUP-1]
-  let stepIndex = Math.min(Math.floor(SELECTED_STEP / DATA_COMPRESSION_PREDICTIONS), row.predictions.length-1)
-  PREDICTIONS.data(row.predictions[stepIndex], sampleData.sample)
+  if (STORED_DATA != null) {
+    let sampleData = STORED_DATA.map[SELECTED_SAMPLE]
+    let row = sampleData.runs[CURRENT_RUN_ID - 1]
+    if (row != null) {
+      let stepIndex = Math.min(Math.floor(SELECTED_STEP / DATA_COMPRESSION_PREDICTIONS), row.predictions.length-1)
+      PREDICTIONS.data(row.predictions[stepIndex], sampleData.sample)
+    }
+  }
 }
+
+function fireCurrentUpdateQuery() {
+  console.log("Updating current line...")
+  loadSpectrogramData()
+    .then(() => {
+      REWARDS_GRAPH.loadRunLine()
+    })
+}
+
+setInterval(function() {
+  fireCurrentUpdateQuery()
+}, 5000)

@@ -146,4 +146,4 @@ def feed_folder(data_folder, feed_run, ep_delay):
 
 
 if __name__ == '__main__':
-    feed_folder(data_folder='../../../thesis_data', feed_run=1, ep_delay=0.05)
+    feed_folder(data_folder='../../../thesis_data', feed_run=6, ep_delay=0.2)
