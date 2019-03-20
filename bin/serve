@@ -1,0 +1,2 @@
+source activate vaml
+python serve.py

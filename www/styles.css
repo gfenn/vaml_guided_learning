@@ -11,6 +11,37 @@ svg
     top: 10px;
 }
 
+button {
+  position: absolute;
+  border: solid blue 1px;
+  left: 30px;
+  top: 30px;
+  width: 50px;
+  border-radius: 5px;
+}
+button:focus {
+    outline: none;
+}
+
+.event .eventFlag {
+  fill: #2f2f2f;
+}
+.event .eventLine {
+  stroke: black;
+}
+.event .eventText {
+  fill: #FFF;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.event.selected .eventFlag {
+  fill: #518e8e;
+}
+.event.selected .eventLine {
+  stroke: #518e8e;
+}
+
 
 .spectrogramBackground
 {

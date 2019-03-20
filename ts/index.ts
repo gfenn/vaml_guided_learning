@@ -1,7 +1,10 @@
 // Author: Grant Fennessy
 
 // - Constants -
-let RUNS_PER_GROUP = 3
+// TODO: DELETE THIS
+let ALL_RUN_COUNT = 6
+let FINISHED_RUN_COUNT = 5
+let CURRENT_RUN_ID = 6
 let DATA_COMPRESSION_LINES = 1000
 let DATA_COMPRESSION_SHAPE = 1000
 let DATA_COMPRESSION_PREDICTIONS = 10000
@@ -93,14 +96,11 @@ function formatStep(step: number): string {
   return (roundedM / 1000) + 'G'
 }
 
-// Interface for a generic data field - group specifies the group to which
-// this data belongs (set of experiments), and field is an identifier for
+// Interface for a generic data field - field is an identifier for
 // exactly which data is being stored (such as rewards data)
 class DataFieldI {
-  group: string
   field: string
-  constructor(group: string, field: string) {
-    this.group = group
+  constructor(field: string) {
     this.field = field
   }
 }
@@ -108,8 +108,8 @@ class DataFieldI {
 // Simple implementation which uses points to store information.
 class DataField extends DataFieldI {
   points: Point[]
-  constructor(group: string, field: string, points: Point[]) {
-    super(group, field)
+  constructor(field: string, points: Point[]) {
+    super(field)
     this.points = points
   }
 
@@ -128,18 +128,17 @@ class DataField extends DataFieldI {
 // Stores a data field for a specific experiment run
 class DataRunField extends DataField {
   run_id: number
-  constructor(group: string, run_id: number, field: string, points: Point[]) {
-    super(group, field, points)
+  constructor(run_id: number, field: string, points: Point[]) {
+    super(field, points)
     this.run_id = run_id
   }
 }
 
-// Contains multiple runs worth of a specific data field.  This is useful if
-// all of the runs in a group are being queried.
-class DataGroupRunFields extends DataFieldI {
+// Contains fields for multiple runs
+class DataAllRunFields extends DataFieldI {
     runs: DataRunField[]
     constructor(runs: DataRunField[]) {
-      super(runs[0].group, runs[0].field)
+      super(runs[0].field)
       this.runs = runs
     }
 
@@ -148,17 +147,17 @@ class DataGroupRunFields extends DataFieldI {
     }
 }
 
-// Holds percentile metrics across all runs for a specific field in a group.
+// Holds percentile metrics across all runs for a specific field.
 // Used for the curve boxplot of rewards values.
-class DataGroupMetrics extends DataFieldI {
+class DataMetrics extends DataFieldI {
   p25: DataField
   p50: DataField
   p75: DataField
-  constructor(group: string, metrics: any) {
-    super(group, 'metrics')
-    this.p25 = new DataField(group, 'p25', metrics['p25'])
-    this.p50 = new DataField(group, 'p50', metrics['p50'])
-    this.p75 = new DataField(group, 'p75', metrics['p75'])
+  constructor(metrics: any) {
+    super('metrics')
+    this.p25 = new DataField('p25', metrics['p25'])
+    this.p50 = new DataField('p50', metrics['p50'])
+    this.p75 = new DataField('p75', metrics['p75'])
   }
 
   // Apply smoothing to all of the metrics
@@ -179,7 +178,7 @@ class DataGroupMetrics extends DataFieldI {
 }
 
 // Stores all of the loaded data for the model's predictions at a specific step.
-class PredictionSampleStepData {
+class Prediction {
   // The 0-1 probability of the action being taken -> softmax result
   data: number[]
   // Probabilities normalized so highest probability is 1 and lowest is 0
@@ -205,7 +204,7 @@ class PredictionSampleStepData {
 }
 
 // The name of a sample, along with its user-defined labels (bad, neutral, or good)
-class PredictionSample {
+class Sample {
   name: string
   labels: number[]
   constructor(name: string, labels: number[] = generateMockPredictionLabels()) {
@@ -214,40 +213,49 @@ class PredictionSample {
   }
 }
 
-// For a given run, stores all of the prediction steps that took place.
-class PredictionSampleRowData {
-  sample: PredictionSample
+// For a given run, stores all of the predictions that took place.
+class PredictionsForRun {
+  sample: Sample
   run: number
-  steps: PredictionSampleStepData[]
-  constructor(sample: PredictionSample, run: number, steps: PredictionSampleStepData[]) {
+  predictions: Prediction[]
+  constructor(sample: Sample, run: number, predictions: Prediction[]) {
     this.sample = sample
     this.run = run
-    this.steps = steps
+    this.predictions = predictions
   }
 }
 
-// Stores all of the runs worth for a given sample within a group.
-class PredictionSampleData {
-  sample: PredictionSample
-  rows: PredictionSampleRowData[]
-  constructor(sample: PredictionSample, rows: PredictionSampleRowData[]) {
+// Stores all of the runs worth for a given sample.
+class PredictionsAllRuns {
+  sample: Sample
+  runs: PredictionsForRun[]
+  constructor(sample: Sample, runs: PredictionsForRun[]) {
     this.sample = sample
-    this.rows = rows
+    this.runs = runs
   }
 }
 
-// Stores all sample data for a group, queriable based on sample.  Also stores
+// Stores all sample data for all runs, queriable based on sample.  Also stores
 // a unique list of samples.
-class PredictionGroupSampleData {
-  dataBySample: {[key: string]: PredictionSampleData} = {}
-  samples: PredictionSample[] = []
-  data: PredictionSampleData[] = []
-  constructor(data: PredictionSampleData[]) {
+class SampleDataRepo {
+  map: {[key: string]: PredictionsAllRuns} = {}
+  samples: Sample[] = []
+  data: PredictionsAllRuns[] = []
+  constructor(data: PredictionsAllRuns[]) {
     data.forEach(d => {
-      this.dataBySample[d.sample.name] = d
+      this.map[d.sample.name] = d
       this.samples.push(d.sample)
     })
     this.data = data
+  }
+}
+
+class EpisodeEvent {
+  step: number
+  name: string
+  constructor(step: number, name: string) {
+    this.step = step
+    this.name = name
   }
 }
 
@@ -264,13 +272,12 @@ class DataCollector {
     return points
   }
 
-  // For a given group and a given run, loads all values in the provided field
+  // For a given run, loads all values in the provided field
   // (such as rewards).  Data is then compressed, where steps are bucketized
   // by mean so as to reduce data requirements with millions of steps.
-  async getRunField(group: string, run: number, compression: number, field: string): Promise<DataRunField> {
+  async getRunField(run: number, compression: number, field: string): Promise<DataRunField> {
     let atp = this._arrayToPoints
-    return fetch('data/run_field?group=' + group
-                 + '&run=' + run
+    return fetch('data/run_field?run=' + run
                  + '&compression=' + compression
                  + '&field=' + field)
         .then(response => response.json() )
@@ -278,28 +285,33 @@ class DataCollector {
           return atp(values, compression)
         })
         .then(function(points) {
-          return new DataRunField(group, run, field, points)
+          return new DataRunField(run, field, points)
         })
   }
 
-  // Returns the individual run data for all runs within a group
-  async getAllRunFields(group: string, compression: number, field: string): Promise<DataGroupRunFields> {
+  // Returns the individual run data for all runs
+  async getAllRunFields(compression: number, field: string): Promise<DataAllRunFields> {
     let promises = []
-    // TODO - query the metadata for that group to get the number of runs
-    for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
-      promises.push(this.getRunField(group, run_id, compression, field))
+    console.error("Need to determine number of runs")
+    // TODO - query to get number of groups
+    for (let run_id = 1; run_id <= ALL_RUN_COUNT; run_id++) {
+      promises.push(this.getRunField(run_id, compression, field))
     }
     return Promise.all(promises)
       .then(function(all_runs: DataRunField[]) {
-        return new DataGroupRunFields(all_runs)
+        return new DataAllRunFields(all_runs)
       })
   }
 
-  // Returns metrics for a group, which includes rewards percentiles.
-  async getGroupMetrics(group: string, compression: number): Promise<DataGroupMetrics> {
+  async resetCurrent(): Promise<void> {
+    return fetch('data/reset')
+      .then(function(response) { return response.json(); })
+  }
+
+  // Returns metrics, which includes rewards percentiles.
+  async getMetrics(compression: number): Promise<DataMetrics> {
     let atp = this._arrayToPoints
-    return fetch('data/group_metrics?group=' + group
-                 + '&compression=' + compression)
+    return fetch('data/metrics?compression=' + compression)
         .then(function(response) { return response.json(); })
         .then(function(metrics) {
           let data: any = {}
@@ -309,71 +321,77 @@ class DataCollector {
           return data
         })
         .then(function(metrics) {
-          return new DataGroupMetrics(group, metrics)
+          return new DataMetrics(metrics)
         })
   }
 
   // Returns a list of all use-annotated samples
-  async getAllSamples(): Promise<PredictionSample[]> {
+  async getAllSamples(): Promise<Sample[]> {
     // TODO -> have samples stored and return them with ththis query
-    let samples = ["blocks", "deeplab", "nodsf", "linear"].map(sample => {
-      return new PredictionSample(sample)
+    let samples = ["Straight", "Left", "Right"].map(sample => {
+      return new Sample(sample)
     })
     return Promise.resolve(samples)
     // return fetch('data/all_samples')
     //     .then(function(response) { return response.json(); })
   }
 
-  // Returns the entire set of predictions for a sample within a group + run.
+  // Returns the entire set of predictions for a sample within a run.
   // Basically, how well did this experiment within the batch handle the given sample over training?
   // TODO - needs to eventually be something where you pass in specific runs
-  async getSamplePredictionsForRun(
-    group: string,
+  async getPredictionsForRun(
     run_id: number,
-    sample: PredictionSample,
+    sample: Sample,
     compression: number
-  ): Promise<PredictionSampleRowData> {
+  ): Promise<PredictionsForRun> {
     // TODO - SINCE THIS IS MOCK
-    group = sample.name
-    return this.getRunField(group, run_id, compression, 'rewards')
+    return this.getRunField(run_id, compression, 'rewards')
       .then(data => {
         let values = normalizeValues(data.points.map(p => p.y))
         let steps = values.map(v => {
           let mockData: number[] = generateMockPredictionData()
-          return new PredictionSampleStepData(mockData, v, sample.labels)
+          return new Prediction(mockData, v, sample.labels)
         })
 
-        return new PredictionSampleRowData(sample, run_id, steps)
+        return new PredictionsForRun(sample, run_id, steps)
       })
   }
 
-  // Within an experiment group, returns predictions for all runs.
-  async getSamplePredictionsForGroupSample(
-    group: string,
-    sample: PredictionSample,
+  // Returns predictions for all runs.
+  async getSamplePredictionsAllRuns(
+    sample: Sample,
     compression: number
-  ): Promise<PredictionSampleData> {
-    let promises: Promise<PredictionSampleRowData>[] = []
-    for (let run_id = 1; run_id <= RUNS_PER_GROUP; run_id++) {
-      promises.push(this.getSamplePredictionsForRun(group, run_id, sample, compression))
+  ): Promise<PredictionsAllRuns> {
+    let promises: Promise<PredictionsForRun>[] = []
+    for (let run_id = 1; run_id <= ALL_RUN_COUNT; run_id++) {
+      promises.push(this.getPredictionsForRun(run_id, sample, compression))
     }
     return Promise.all(promises)
       .then(values => {
-        return new PredictionSampleData(sample, values)
+        let filtered = values.filter(it => {
+          return it.predictions.length > 0
+        })
+        return new PredictionsAllRuns(sample, filtered)
       })
   }
 
   // Within an experiment group, returns data for all runs against all samples
-  async getSamplePredictionsForGroup(
-    group: string,
+  async getSampleDataRepo(
     compression: number
-  ): Promise<PredictionGroupSampleData> {
+  ): Promise<SampleDataRepo> {
     return this.getAllSamples().then(samples => {
-      let promises: Promise<PredictionSampleData>[] = []
+      let promises: Promise<PredictionsAllRuns>[] = []
       samples.forEach(sample => {
-        promises.push(this.getSamplePredictionsForGroupSample(group, sample, compression))
+        promises.push(this.getSamplePredictionsAllRuns(sample, compression))
       })
-      return Promise.all(promises).then(values => new PredictionGroupSampleData(values))
+      return Promise
+        .all(promises)
+        .then(values => {
+          let filtered = values.filter(it => {
+            return it.runs.length > 0
+          })
+          return new SampleDataRepo(filtered)
+        })
     })
   }
 
@@ -938,9 +956,11 @@ class RewardsGraph extends ShapeRegion {
   private _curveBoxplotShape: Polygon
   private _curveBoxplotCenterline: Line
   private _runLines: Line[] = []
+  private _selectedEvent: string = null
 
   private _backgroundG: any
   private _selectionG: any
+  private _eventsG: any
 
   constructor() {
     super(d3.select('#rewards-chart'))
@@ -949,7 +969,7 @@ class RewardsGraph extends ShapeRegion {
     // Add background, which has a slight color offset to make the white
     // curve boxplot shape pop and to make the chart boundaries clear.
     let self = this
-    this._backgroundG = this.g.insert('g', 'g')
+    this._backgroundG = this.g.insert('g', 'g').attr('class', 'background')
     this._backgroundG.append('rect')
       .attr('width', this.size.width)
       .attr('height', this.size.height)
@@ -957,17 +977,24 @@ class RewardsGraph extends ShapeRegion {
       .attr('stroke', 'lightgray')
 
     // The selection line goes on the background - might need to move this forward.
-    this._selectionG = this._backgroundG.append('g')
+    this._selectionG = this._backgroundG
+      .append('g')
+      .attr('class', 'selection')
     this._selectionG
       .append('line')
       .attr('y2', this.size.height)
       .attr('stroke', '#00b3b3')
     this._selectionG
       .append('text')
+      .attr('class', 'selectionText')
       .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
       .attr('font-size', 10)
       .attr('fill', '#00b3b3')
       .text('Step: 0')
+
+    this._eventsG = this._backgroundG
+      .append('g')
+      .attr('class', 'events')
 
     // Add foreground, which is invisible but listens for mouse clicks.
     this.g.append('rect')
@@ -1028,9 +1055,9 @@ class RewardsGraph extends ShapeRegion {
       .text('Step: ' + formatStep(step))
   }
 
-  // Loads all of the metrics data for a given experiment group
-  loadCurveBoxplotData(group: string) {
-    DATA.getGroupMetrics(group, DATA_COMPRESSION_SHAPE)
+  // Loads all of the metrics data
+  loadCurveBoxplotData() {
+    return DATA.getMetrics(DATA_COMPRESSION_SHAPE)
       .then(metrics => {
         metrics.applyEwma(EWMA_BETA_SHAPE)
 
@@ -1047,21 +1074,112 @@ class RewardsGraph extends ShapeRegion {
       })
   }
 
-  // Loads all of the run lines for a given group.  NOTE - Right now it's
+  // Loads all of the run lines.  NOTE - Right now it's
   // actually just loading the first run.  Later this should be updated
-  // to let you pick the run within the experiment group.
-  loadRunLines(group: string) {
-    // Remove old lines
-    this._runLines.forEach(line => line.g.remove())
-    this._runLines = []
-
+  // to show the current run
+  loadRunLine() {
     // Add lines
-    DATA.getRunField(group, 1, DATA_COMPRESSION_LINES, 'rewards')
+    DATA.getRunField(CURRENT_RUN_ID, DATA_COMPRESSION_LINES, 'rewards')
       .then(runData => {
+        // Empty?
+        if (runData.points.length == 0) return
+
+        // Apply
         runData.applyEwma(EWMA_BETA_LINES)
-        let line = this.addLine(runData.points, 'red')
-        this._runLines.push(line)
+        if (this._runLines.length == 0) {
+          let line = this.addLine(runData.points, 'red')
+          this._runLines.push(line)
+        }
+        else {
+          this._runLines[0].points = runData.points
+          this._runLines[0].rebuild()
+        }
       })
+      .then(() => {
+        // If automatic selection, select last step
+        if (!IS_MANUAL_SELECTION) {
+          setSelectedStep(-1, false)
+        }
+      })
+  }
+
+  lastStep() {
+    if (this._runLines.length > 0) {
+      return this._runLines[0].points.length * DATA_COMPRESSION_LINES
+    }
+    return 0
+  }
+
+  addEvent(event: EpisodeEvent) {
+    // Create event group w/ transform
+    let eventG = this._eventsG
+      .append('g')
+      .attr('id', event.name)
+      .attr('class', 'event')
+      .attr('transform', 'translate(' + this._xAxis.domain(event.step) + ', 0)')
+
+    // Line is simple
+    let FLAG_OVERSHOT = 6
+    eventG.append('line')
+      .attr('class', 'eventLine')
+      .attr('y2', this.size.height + FLAG_OVERSHOT)
+
+    // Now need flag shape underneath line
+    let pointsFunc = function(data: Point[]) {
+      return data.map(function(point: Point) {
+        return [point.x, point.y].join(",")
+      }).join(" ")
+    }
+    let yBase = this.size.height + FLAG_OVERSHOT
+    let flagHeight = 18
+    let flagPoints = [
+      new Point(0, yBase),
+      new Point(40, yBase),
+      new Point(50, yBase + flagHeight/2),
+      new Point(40, yBase + flagHeight),
+      new Point(0, yBase + flagHeight)
+    ]
+    eventG.append('polygon')
+      .attr('class', 'eventFlag')
+      .datum(flagPoints)
+      .attr('points', pointsFunc)
+      .on('mousedown', () => {
+        this.selectEvent(event)
+      })
+
+    // Add the text
+    eventG.append('text')
+      .attr('class', 'eventText')
+      .attr('x', 3)
+      .attr('y', yBase + flagHeight/2 + 3)
+      .text(event.name);
+
+    // Select
+    this.selectEvent(event)
+  }
+
+  selectEvent(event: EpisodeEvent) {
+    this._eventsG.selectAll('g').attr('class', 'event')
+    if (event.name == this._selectedEvent) {
+      this._selectedEvent = null
+      setSelectedStep(-1, false)
+    }
+    else {
+      this._selectedEvent = event.name
+      this._eventsG.selectAll('#' + event.name).attr('class', 'event selected')
+      setSelectedStep(event.step, true)
+    }
+  }
+
+  deselectEvents() {
+    this._selectedEvent = null
+    this._eventsG.selectAll('g').attr('class', 'event')
+  }
+
+  clearEvents() {
+    this._eventsG
+      .selectAll('g')
+      .remove()
   }
 
 }
@@ -1139,7 +1257,7 @@ class SpectrogramRow extends SimpleG {
     }
   }
 
-  data(steps: PredictionSampleStepData[]) {
+  data(steps: Prediction[]) {
     // Map
     let values = steps.map(s => s.correctness)
 
@@ -1159,13 +1277,13 @@ class SpectrogramRow extends SimpleG {
 // A single spectrogram, which has multiple rows (one for each run)
 class Spectrogram extends SimpleG {
 
-  sample: PredictionSample
+  sample: Sample
   label: any
   rows: SpectrogramRow[] = []
   background: any
   xDomain: any
 
-  constructor(g: SVGGElement, width: number, height: number, sample: PredictionSample) {
+  constructor(g: SVGGElement, width: number, height: number, sample: Sample) {
     super(g, width, height)
     this.sample = sample
 
@@ -1237,18 +1355,18 @@ class Spectrogram extends SimpleG {
       }
   }
 
-  data(rows: PredictionSampleRowData[]) {
+  data(rows: PredictionsForRun[]) {
     // Check for a rebuild
     this.checkRebuild(rows.length)
     let maxLength = rows
-      .map(r => r.steps.length)
-      .reduce((prev, curr) => curr > prev ? curr : prev, rows[0].steps.length)
+      .map(r => r.predictions.length)
+      .reduce((prev, curr) => curr > prev ? curr : prev, rows[0].predictions.length)
 
     this.xDomain.domain([0, maxLength])
 
     // Set the datavalues
     rows.forEach((row, index) => {
-      this.rows[index].data(row.steps)
+      this.rows[index].data(row.predictions)
     })
   }
 
@@ -1261,14 +1379,14 @@ class Spectrogram extends SimpleG {
 // Contains all of the set of spectrograms (one per sample)
 class SpectrogramsArea extends SimpleG {
 
-  samples: PredictionSample[] = []
+  samples: Sample[] = []
   spectrogramsMap: {[key: string]: Spectrogram} = {}
 
   constructor() {
     super(d3.select('#spectrograms').node() as any, 600, 150)
   }
 
-  private rebuild(samples: PredictionSample[]) {
+  private rebuild(samples: Sample[]) {
     // Determine the band size for the spectrograms
     this.samples = samples
     let spectrogram_vertical_band = d3.scaleBand()
@@ -1291,26 +1409,26 @@ class SpectrogramsArea extends SimpleG {
       .attr('class', 'spectrogram')
       .nodes()
       .forEach(node => {
-        let data: PredictionSample = d3.select(node).datum() as PredictionSample
+        let data: Sample = d3.select(node).datum() as Sample
         let spectrogram = new Spectrogram(node, this.width, spectrogram_vertical_band.bandwidth(), data)
         this.spectrogramsMap[data.name] = spectrogram
       })
   }
 
-  checkRebuild(samples: PredictionSample[]) {
+  checkRebuild(samples: Sample[]) {
     if (samples.length != this.samples.length) {
       this.rebuild(samples)
     }
   }
 
-  data(data: PredictionGroupSampleData) {
+  data(data: SampleDataRepo) {
     // Check for a rebuild (make a unique set of samples)
     this.checkRebuild(data.samples)
 
     // Populate the data
     data.data.forEach(d => {
       let s = this.spectrogramsMap[d.sample.name]
-      s.data(d.rows)
+      s.data(d.runs)
       s.text = d.sample.name
     })
   }
@@ -1375,8 +1493,8 @@ class HoverText {
 class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
-  sampleData: PredictionSampleStepData
-  sample: PredictionSample
+  prediction: Prediction
+  sample: Sample
   private _header: any
   private _hoverText: HoverText
   private _monoColors: boolean = true
@@ -1430,7 +1548,11 @@ class PredictionMatrix extends ShapeRegion {
       // Square
       let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
       box.g.attr('stroke', 'clear')
-        .on('mouseover', (d: any) => { this.hoverDisplay(d[0], d[1]) })
+        .on('mouseover', (d: any) => {
+          if (d != null) {
+            this.hoverDisplay(d[0], d[1])
+          }
+        })
         .on('mouseout', (v: any) => { this.stopHover() })
         .on('mousedown', () => {
           this._monoColors = false
@@ -1445,8 +1567,8 @@ class PredictionMatrix extends ShapeRegion {
   }
 
   // Inserts the data into the already generated squares
-  data(data: PredictionSampleStepData, sample: PredictionSample) {
-    this.sampleData = data
+  data(prediction: Prediction, sample: Sample) {
+    this.prediction = prediction
     this.sample = sample
     this._updateColors()
     this._header.text('Sample: ' + sample.name)
@@ -1466,13 +1588,15 @@ class PredictionMatrix extends ShapeRegion {
       valueMap[2] = function() { return 'green' }
     }
 
-    let data = this.sampleData
-    data.dataNormalized.forEach((v, i) => {
-      // let color = colors[sample.labels[i]]
-      let datum = [i, data.data[i]]
-      let label = this.sample.labels[i]
-      this.squares[i].g.attr('fill', valueMap[label](v)).datum(datum)
-    })
+    let prediction = this.prediction
+    if (prediction != null) {
+      prediction.dataNormalized.forEach((v, i) => {
+        // let color = colors[sample.labels[i]]
+        let datum = [i, prediction.data[i]]
+        let label = this.sample.labels[i]
+        this.squares[i].g.attr('fill', valueMap[label](v)).datum(datum)
+      })
+    }
   }
 
   private hoverDisplay(index: number, value: number) {
@@ -1504,28 +1628,37 @@ class PredictionMatrix extends ShapeRegion {
 // State values
 let SELECTED_STEP: number = 0
 let SELECTED_SAMPLE: string = ''
+let IS_MANUAL_SELECTION: boolean = false
+let UPDATE_ON: boolean = false
 
 // Build the components first
 let REWARDS_GRAPH = new RewardsGraph()
 let SPECTROGRAMS = new SpectrogramsArea()
 let PREDICTIONS = new PredictionMatrix()
+let STORED_DATA: SampleDataRepo
+let EVENTS: EpisodeEvent[] = []
 
 // Populate the rewards
-REWARDS_GRAPH.loadCurveBoxplotData('blocks')
-REWARDS_GRAPH.loadRunLines('blocks')
-
-let STORED_DATA: PredictionGroupSampleData
+REWARDS_GRAPH.loadCurveBoxplotData()
+  .then(() => {
+    fireCurrentUpdateQuery()
+  })
 
 // Populate the spectrogram area + predictions matrix
-DATA.getSamplePredictionsForGroup('blocks', DATA_COMPRESSION_PREDICTIONS)
-  .then(data => {
-    // Save the data
-    STORED_DATA = data
 
-    // Spectrograms
-    SPECTROGRAMS.data(data)
-    SPECTROGRAMS.spectrogramsMap['blocks'].select()
-  })
+function loadSpectrogramData() {
+  return DATA.getSampleDataRepo(DATA_COMPRESSION_PREDICTIONS)
+    .then(data => {
+      // Save the data
+      STORED_DATA = data
+
+      // Spectrograms
+      SPECTROGRAMS.data(data)
+      if (SELECTED_SAMPLE == '') {
+        SPECTROGRAMS.spectrogramsMap['Left'].select()
+      }
+    })
+}
 
 function setSelectedSample(sample: string) {
   if (sample == SELECTED_SAMPLE) return
@@ -1533,15 +1666,87 @@ function setSelectedSample(sample: string) {
   updateSelections()
 }
 
-function setSelectedStep(step: number) {
+function setSelectedStep(step: number = -1, manual: boolean = true) {
+  // Double click?
+  let last = REWARDS_GRAPH.lastStep()
+  if (IS_MANUAL_SELECTION && manual && step == SELECTED_STEP) {
+    manual = true
+    step = -1
+  }
+  if (step == -1) {
+    step = last
+  }
+  if (step > last) {
+    step = last
+    manual = false
+  }
+
+  // Select
+  IS_MANUAL_SELECTION = manual
   SELECTED_STEP = step
   REWARDS_GRAPH.selectStep(step)
   updateSelections()
 }
 
 function updateSelections() {
-  let sampleData = STORED_DATA.dataBySample[SELECTED_SAMPLE]
-  let row = sampleData.rows[RUNS_PER_GROUP-1]
-  let stepIndex = Math.min(Math.floor(SELECTED_STEP / DATA_COMPRESSION_PREDICTIONS), row.steps.length-1)
-  PREDICTIONS.data(row.steps[stepIndex], sampleData.sample)
+  if (STORED_DATA != null) {
+    let sampleData = STORED_DATA.map[SELECTED_SAMPLE]
+    let row = sampleData.runs[CURRENT_RUN_ID - 1]
+    if (row != null) {
+      let stepIndex = Math.min(Math.floor(SELECTED_STEP / DATA_COMPRESSION_PREDICTIONS), row.predictions.length-1)
+      PREDICTIONS.data(row.predictions[stepIndex], sampleData.sample)
+    }
+  }
 }
+
+function fireCurrentUpdateQuery() {
+  loadSpectrogramData()
+    .then(() => {
+      REWARDS_GRAPH.loadRunLine()
+    })
+}
+
+function setUpdatesEnabled(enabled: boolean) {
+  if (!enabled) {
+    UPDATE_ON = false
+    d3.select('#stop').text('Start')
+  } else {
+    UPDATE_ON = true
+    d3.select('#stop').text('Stop')
+  }
+}
+
+function createEvent(step: number) {
+  let event = new EpisodeEvent(step, 'Event' + (EVENTS.length + 1))
+  EVENTS.push(event)
+  REWARDS_GRAPH.addEvent(event)
+}
+
+function clearEvents() {
+  EVENTS = []
+  REWARDS_GRAPH.clearEvents()
+}
+
+d3.select('#reset').on('mousedown', () => {
+  setUpdatesEnabled(true)
+  clearEvents()
+  DATA.resetCurrent()
+    .then(() => {
+      fireCurrentUpdateQuery()
+    })
+})
+
+d3.select('#stop').on('mousedown', () => {
+  setUpdatesEnabled(!UPDATE_ON)
+})
+
+d3.select('#event').on('mousedown', () => {
+  createEvent(REWARDS_GRAPH.lastStep())
+  // createEvent(SELECTED_STEP)
+})
+
+setInterval(function() {
+  if (UPDATE_ON) {
+    fireCurrentUpdateQuery()
+  }
+}, 1000)
