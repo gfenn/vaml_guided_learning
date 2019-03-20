@@ -250,6 +250,15 @@ class SampleDataRepo {
   }
 }
 
+class EpisodeEvent {
+  step: number
+  name: string
+  constructor(step: number, name: string) {
+    this.step = step
+    this.name = name
+  }
+}
+
 // Class with several useful methods for collecting data from the server
 // by way of promises.  All server API calls take place here, and properly
 // formatted data is returned.
@@ -947,9 +956,11 @@ class RewardsGraph extends ShapeRegion {
   private _curveBoxplotShape: Polygon
   private _curveBoxplotCenterline: Line
   private _runLines: Line[] = []
+  private _selectedEvent: string = null
 
   private _backgroundG: any
   private _selectionG: any
+  private _eventsG: any
 
   constructor() {
     super(d3.select('#rewards-chart'))
@@ -958,7 +969,7 @@ class RewardsGraph extends ShapeRegion {
     // Add background, which has a slight color offset to make the white
     // curve boxplot shape pop and to make the chart boundaries clear.
     let self = this
-    this._backgroundG = this.g.insert('g', 'g')
+    this._backgroundG = this.g.insert('g', 'g').attr('class', 'background')
     this._backgroundG.append('rect')
       .attr('width', this.size.width)
       .attr('height', this.size.height)
@@ -966,17 +977,24 @@ class RewardsGraph extends ShapeRegion {
       .attr('stroke', 'lightgray')
 
     // The selection line goes on the background - might need to move this forward.
-    this._selectionG = this._backgroundG.append('g')
+    this._selectionG = this._backgroundG
+      .append('g')
+      .attr('class', 'selection')
     this._selectionG
       .append('line')
       .attr('y2', this.size.height)
       .attr('stroke', '#00b3b3')
     this._selectionG
       .append('text')
+      .attr('class', 'selectionText')
       .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
       .attr('font-size', 10)
       .attr('fill', '#00b3b3')
       .text('Step: 0')
+
+    this._eventsG = this._backgroundG
+      .append('g')
+      .attr('class', 'events')
 
     // Add foreground, which is invisible but listens for mouse clicks.
     this.g.append('rect')
@@ -1087,9 +1105,81 @@ class RewardsGraph extends ShapeRegion {
 
   lastStep() {
     if (this._runLines.length > 0) {
-      return this._runLines[0].points.length
+      return this._runLines[0].points.length * DATA_COMPRESSION_LINES
     }
     return 0
+  }
+
+  addEvent(event: EpisodeEvent) {
+    // Create event group w/ transform
+    let eventG = this._eventsG
+      .append('g')
+      .attr('id', event.name)
+      .attr('class', 'event')
+      .attr('transform', 'translate(' + this._xAxis.domain(event.step) + ', 0)')
+
+    // Line is simple
+    let FLAG_OVERSHOT = 6
+    eventG.append('line')
+      .attr('class', 'eventLine')
+      .attr('y2', this.size.height + FLAG_OVERSHOT)
+
+    // Now need flag shape underneath line
+    let pointsFunc = function(data: Point[]) {
+      return data.map(function(point: Point) {
+        return [point.x, point.y].join(",")
+      }).join(" ")
+    }
+    let yBase = this.size.height + FLAG_OVERSHOT
+    let flagHeight = 18
+    let flagPoints = [
+      new Point(0, yBase),
+      new Point(40, yBase),
+      new Point(50, yBase + flagHeight/2),
+      new Point(40, yBase + flagHeight),
+      new Point(0, yBase + flagHeight)
+    ]
+    eventG.append('polygon')
+      .attr('class', 'eventFlag')
+      .datum(flagPoints)
+      .attr('points', pointsFunc)
+      .on('mousedown', () => {
+        this.selectEvent(event)
+      })
+
+    // Add the text
+    eventG.append('text')
+      .attr('class', 'eventText')
+      .attr('x', 3)
+      .attr('y', yBase + flagHeight/2 + 3)
+      .text(event.name);
+
+    // Select
+    this.selectEvent(event)
+  }
+
+  selectEvent(event: EpisodeEvent) {
+    this._eventsG.selectAll('g').attr('class', 'event')
+    if (event.name == this._selectedEvent) {
+      this._selectedEvent = null
+      setSelectedStep(-1, false)
+    }
+    else {
+      this._selectedEvent = event.name
+      this._eventsG.selectAll('#' + event.name).attr('class', 'event selected')
+      setSelectedStep(event.step, true)
+    }
+  }
+
+  deselectEvents() {
+    this._selectedEvent = null
+    this._eventsG.selectAll('g').attr('class', 'event')
+  }
+
+  clearEvents() {
+    this._eventsG
+      .selectAll('g')
+      .remove()
   }
 
 }
@@ -1546,6 +1636,7 @@ let REWARDS_GRAPH = new RewardsGraph()
 let SPECTROGRAMS = new SpectrogramsArea()
 let PREDICTIONS = new PredictionMatrix()
 let STORED_DATA: SampleDataRepo
+let EVENTS: EpisodeEvent[] = []
 
 // Populate the rewards
 REWARDS_GRAPH.loadCurveBoxplotData()
@@ -1563,7 +1654,9 @@ function loadSpectrogramData() {
 
       // Spectrograms
       SPECTROGRAMS.data(data)
-      SPECTROGRAMS.spectrogramsMap['Left'].select()
+      if (SELECTED_SAMPLE == '') {
+        SPECTROGRAMS.spectrogramsMap['Left'].select()
+      }
     })
 }
 
@@ -1575,7 +1668,7 @@ function setSelectedSample(sample: string) {
 
 function setSelectedStep(step: number = -1, manual: boolean = true) {
   // Double click?
-  let last = REWARDS_GRAPH.lastStep() * DATA_COMPRESSION_LINES
+  let last = REWARDS_GRAPH.lastStep()
   if (IS_MANUAL_SELECTION && manual && step == SELECTED_STEP) {
     manual = true
     step = -1
@@ -1623,8 +1716,20 @@ function setUpdatesEnabled(enabled: boolean) {
   }
 }
 
+function createEvent(step: number) {
+  let event = new EpisodeEvent(step, 'Event' + (EVENTS.length + 1))
+  EVENTS.push(event)
+  REWARDS_GRAPH.addEvent(event)
+}
+
+function clearEvents() {
+  EVENTS = []
+  REWARDS_GRAPH.clearEvents()
+}
+
 d3.select('#reset').on('mousedown', () => {
   setUpdatesEnabled(true)
+  clearEvents()
   DATA.resetCurrent()
     .then(() => {
       fireCurrentUpdateQuery()
@@ -1635,8 +1740,13 @@ d3.select('#stop').on('mousedown', () => {
   setUpdatesEnabled(!UPDATE_ON)
 })
 
+d3.select('#event').on('mousedown', () => {
+  createEvent(REWARDS_GRAPH.lastStep())
+  // createEvent(SELECTED_STEP)
+})
+
 setInterval(function() {
   if (UPDATE_ON) {
     fireCurrentUpdateQuery()
   }
-}, 5000)
+}, 1000)

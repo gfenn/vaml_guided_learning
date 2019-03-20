@@ -23,6 +23,25 @@ button:focus {
     outline: none;
 }
 
+.event .eventFlag {
+  fill: #2f2f2f;
+}
+.event .eventLine {
+  stroke: black;
+}
+.event .eventText {
+  fill: #FFF;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.event.selected .eventFlag {
+  fill: #518e8e;
+}
+.event.selected .eventLine {
+  stroke: #518e8e;
+}
+
 
 .spectrogramBackground
 {
