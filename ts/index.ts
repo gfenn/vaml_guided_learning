@@ -959,7 +959,9 @@ class RewardsGraph extends ShapeRegion {
   private _selectedEvent: string = null
 
   private _backgroundG: any
-  private _selectionG: any
+  private _selectionG_Range: any // Used for range
+  private _selectionG_1: any
+  private _selectionG_2: any // Used for range
   private _eventsG: any
 
   constructor() {
@@ -977,20 +979,15 @@ class RewardsGraph extends ShapeRegion {
       .attr('stroke', 'lightgray')
 
     // The selection line goes on the background - might need to move this forward.
-    this._selectionG = this._backgroundG
-      .append('g')
-      .attr('class', 'selection')
-    this._selectionG
-      .append('line')
-      .attr('y2', this.size.height)
-      .attr('stroke', '#00b3b3')
-    this._selectionG
-      .append('text')
-      .attr('class', 'selectionText')
-      .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
-      .attr('font-size', 10)
-      .attr('fill', '#00b3b3')
-      .text('Step: 0')
+    this._selectionG_Range = this._backgroundG
+      .append('rect')
+      .attr('class', 'rangeBG')
+      .attr('width', '0')
+      .attr('height', this.size.height)
+      .attr('visibility', 'hidden')
+    this._selectionG_1 = this.buildSelectionLine()
+    this._selectionG_2 = this.buildSelectionLine()
+    this._selectionG_2.attr('visibility', 'hidden')
 
     this._eventsG = this._backgroundG
       .append('g')
@@ -1004,7 +1001,10 @@ class RewardsGraph extends ShapeRegion {
       .on('mousedown', function() {
         let coords = d3.mouse(this)
         let step = self._xAxis.domain.invert(coords[0])
-        setSelectedStep(Math.round(step))
+        if (d3.event.shiftKey)
+          setSelectionRange(SELECTED_STEPS[0], step)
+        else
+          setSelectedStep(Math.round(step))
       })
 
 
@@ -1014,6 +1014,28 @@ class RewardsGraph extends ShapeRegion {
 
     // Put the X axis on top
     this._xAxis.top = true
+  }
+
+  private buildSelectionLine(): any {
+    // Create g
+    let selectionG = this._backgroundG
+      .append('g')
+      .attr('class', 'selection')
+
+    // Add line
+    selectionG
+      .append('line')
+      .attr('class', 'selectionLine')
+      .attr('y2', this.size.height)
+
+    // Add text
+    selectionG
+      .append('text')
+      .attr('class', 'selectionText')
+      .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
+      .text('Step: 0')
+
+    return selectionG
   }
 
   // Builds a curve boxplot shape with filler data, then hides it.  Pre-building
@@ -1037,7 +1059,31 @@ class RewardsGraph extends ShapeRegion {
   // Selects a step, updating the selection line and text.
   selectStep(step: number) {
     let x = this._xAxis.domain(step)
-    this._selectionG.attr('transform', 'translate(' + x + ', 0)')
+    this.positionSelectionBar(step, x, this._selectionG_1)
+    this._selectionG_2.attr('visibility', 'hidden')
+    this._selectionG_Range.attr('visibility', 'hidden')
+  }
+
+  selectStepRange(range: number[]) {
+    // Position bars
+    let x0 = this._xAxis.domain(range[0])
+    let x1 = this._xAxis.domain(range[1])
+    this.positionSelectionBar(range[0], x0, this._selectionG_1)
+    this.positionSelectionBar(range[1], x1, this._selectionG_2)
+
+    // Position background
+    this._selectionG_Range
+      .attr('x', x0)
+      .attr('width', x1 - x0)
+
+    // Enabled visibility
+    this._selectionG_2.attr('visibility', 'visible')
+    this._selectionG_Range.attr('visibility', 'visible')
+  }
+
+  private positionSelectionBar(step: number, x: number, selectionG: any) {
+    // Update position
+    selectionG.attr('transform', 'translate(' + x + ', 0)')
 
     let transformX
     let anchor
@@ -1049,7 +1095,7 @@ class RewardsGraph extends ShapeRegion {
       transformX = 3
       anchor = 'begin'
     }
-    this._selectionG.select('text')
+    selectionG.select('text')
       .attr('transform', 'translate(' + transformX + ', ' + (this.size.height - 4) + ')')
       .attr('text-anchor', anchor)
       .text('Step: ' + formatStep(step))
@@ -1626,7 +1672,7 @@ class PredictionMatrix extends ShapeRegion {
 // directly influence the application state.
 
 // State values
-let SELECTED_STEP: number = 0
+let SELECTED_STEPS: number[] = [0]
 let SELECTED_SAMPLE: string = ''
 let IS_MANUAL_SELECTION: boolean = false
 let UPDATE_ON: boolean = false
@@ -1669,34 +1715,76 @@ function setSelectedSample(sample: string) {
 function setSelectedStep(step: number = -1, manual: boolean = true) {
   // Double click?
   let last = REWARDS_GRAPH.lastStep()
-  if (IS_MANUAL_SELECTION && manual && step == SELECTED_STEP) {
-    manual = true
-    step = -1
-  }
-  if (step == -1) {
-    step = last
-  }
-  if (step > last) {
+  if (step == -1 || step > last) {
     step = last
     manual = false
   }
 
   // Select
   IS_MANUAL_SELECTION = manual
-  SELECTED_STEP = step
-  REWARDS_GRAPH.selectStep(step)
+  SELECTED_STEPS = [step]
+  updateSelections()
+}
+
+function setSelectionRange(step_0: number = -1, step_1: number = -1) {
+  // Both -1?
+  if (step_0 == step_1 && step_1 == -1) {
+    setSelectedStep(-1, false)
+    return
+  }
+
+  // Out of order?
+  if (step_0 > step_1) {
+    let tmp = step_0
+    step_0 = step_1
+    step_1 = tmp
+  }
+
+  // Set range
+  IS_MANUAL_SELECTION = true
+  SELECTED_STEPS = [step_0, step_1]
   updateSelections()
 }
 
 function updateSelections() {
+  // Attempt to get the run predictions and the sample from the data
+  let runPredictions: PredictionsForRun = null
+  let sample: Sample = null
   if (STORED_DATA != null) {
     let sampleData = STORED_DATA.map[SELECTED_SAMPLE]
-    let row = sampleData.runs[CURRENT_RUN_ID - 1]
-    if (row != null) {
-      let stepIndex = Math.min(Math.floor(SELECTED_STEP / DATA_COMPRESSION_PREDICTIONS), row.predictions.length-1)
-      PREDICTIONS.data(row.predictions[stepIndex], sampleData.sample)
+    if (sampleData != null) {
+      runPredictions = sampleData.runs[CURRENT_RUN_ID - 1]
+      sample = sampleData.sample
     }
   }
+
+  // Do a single or range selection
+  if (SELECTED_STEPS.length == 1) {
+    applySingleSelection(runPredictions, sample)
+  }
+  else {
+    applyRangeSelection(runPredictions, sample)
+  }
+}
+
+function applySingleSelection(runPredictions: PredictionsForRun, sample: Sample) {
+  // Select the rewards graph
+  REWARDS_GRAPH.selectStep(SELECTED_STEPS[0])
+
+  // Select predictions
+  if (runPredictions != null) {
+    let last = runPredictions.predictions.length - 1
+    let selection = Math.floor(SELECTED_STEPS[0] / DATA_COMPRESSION_PREDICTIONS)
+    let stepIndex = Math.min(selection, last)
+    PREDICTIONS.data(runPredictions.predictions[stepIndex], sample)
+  }
+}
+
+function applyRangeSelection(runPredictions: PredictionsForRun, sample: Sample) {
+  // Select the rewards graph
+  REWARDS_GRAPH.selectStepRange(SELECTED_STEPS)
+
+  // TODO - predictions
 }
 
 function fireCurrentUpdateQuery() {

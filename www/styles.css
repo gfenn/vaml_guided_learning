@@ -42,6 +42,18 @@ button:focus {
   stroke: #518e8e;
 }
 
+.rangeBG {
+  fill: #eafffb;
+  pointer-events: none;
+}
+
+.selectionLine {
+  stroke: #00b3b3;
+}
+.selectionText {
+  font-size: 10px;
+  fill: #00b3b3;
+}
 
 .spectrogramBackground
 {
