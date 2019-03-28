@@ -1065,11 +1065,21 @@ class RewardsGraph extends ShapeRegion {
   }
 
   selectStepRange(range: number[]) {
+    // Out of order?
+    let r0 = range[0]
+    let r1 = range[1]
+    if (r0 > r1) {
+      r0 = range[1]
+      r1 = range[0]
+    }
+
     // Position bars
-    let x0 = this._xAxis.domain(range[0])
-    let x1 = this._xAxis.domain(range[1])
-    this.positionSelectionBar(range[0], x0, this._selectionG_1)
-    this.positionSelectionBar(range[1], x1, this._selectionG_2)
+    let x0 = this._xAxis.domain(r0)
+    let x1 = this._xAxis.domain(r1)
+
+    // Store
+    this.positionSelectionBar(r0, x0, this._selectionG_1)
+    this.positionSelectionBar(r1, x1, this._selectionG_2)
 
     // Position background
     this._selectionG_Range
@@ -1731,13 +1741,6 @@ function setSelectionRange(step_0: number = -1, step_1: number = -1) {
   if (step_0 == step_1 && step_1 == -1) {
     setSelectedStep(-1, false)
     return
-  }
-
-  // Out of order?
-  if (step_0 > step_1) {
-    let tmp = step_0
-    step_0 = step_1
-    step_1 = tmp
   }
 
   // Set range
