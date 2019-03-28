@@ -185,12 +185,11 @@ class Prediction {
   dataNormalized: number[]
   // correctness value (0 to 1)
   correctness: number
-  constructor(data: number[], correctness: number, labels: number[]) {
-    this.data = data
 
+  static build(data: number[], correctness: number, labels: number[]) {
     // let max = data.reduce((p, v) => v > p ? v : p, data[0])
     // this.dataNormalized = data.map(v => v / max)
-    this.dataNormalized = normalizeValues(data)
+    let dataNormalized = normalizeValues(data)
 
     // // Measure the correctness
     // TODO - when no longer using mock data, determine correctness score
@@ -199,6 +198,12 @@ class Prediction {
     //   return probability * (labels[index] / 3)
     // })
     // this.correctness = score.reduce((p, c) => p + c, 0) / score.length
+    return new Prediction(data, dataNormalized, correctness)
+  }
+
+  constructor(data: number[], dataNormalized: number[], correctness: number) {
+    this.data = data
+    this.dataNormalized = dataNormalized
     this.correctness = correctness
   }
 }
@@ -222,6 +227,19 @@ class PredictionsForRun {
     this.sample = sample
     this.run = run
     this.predictions = predictions
+  }
+  predictionForStep(step: number) {
+    let last = this.predictions.length - 1
+    return this.predictions[Math.min(step, last)]
+  }
+  predictionsForRange(steps: number[]) {
+    let last = this.predictions.length - 1
+    let s0 = Math.min(steps[0], last)
+    let s1 = Math.min(steps[1], last)
+    if (s0 > s1) {
+      let tmp = s0; s0 = s1; s1 = tmp;
+    }
+    return this.predictions.slice(s0, s1 + 1)
   }
 }
 
@@ -350,7 +368,7 @@ class DataCollector {
         let values = normalizeValues(data.points.map(p => p.y))
         let steps = values.map(v => {
           let mockData: number[] = generateMockPredictionData()
-          return new Prediction(mockData, v, sample.labels)
+          return Prediction.build(mockData, v, sample.labels)
         })
 
         return new PredictionsForRun(sample, run_id, steps)
@@ -1776,10 +1794,9 @@ function applySingleSelection(runPredictions: PredictionsForRun, sample: Sample)
 
   // Select predictions
   if (runPredictions != null) {
-    let last = runPredictions.predictions.length - 1
-    let selection = Math.floor(SELECTED_STEPS[0] / DATA_COMPRESSION_PREDICTIONS)
-    let stepIndex = Math.min(selection, last)
-    PREDICTIONS.data(runPredictions.predictions[stepIndex], sample)
+    let step = Math.floor(SELECTED_STEPS[0] / DATA_COMPRESSION_PREDICTIONS)
+    let prediction = runPredictions.predictionForStep(step)
+    PREDICTIONS.data(prediction, sample)
   }
 }
 
@@ -1787,7 +1804,39 @@ function applyRangeSelection(runPredictions: PredictionsForRun, sample: Sample) 
   // Select the rewards graph
   REWARDS_GRAPH.selectStepRange(SELECTED_STEPS)
 
-  // TODO - predictions
+  // Prediction range
+  let predictions = runPredictions.predictionsForRange(
+    SELECTED_STEPS.map(it =>
+      Math.floor(it / DATA_COMPRESSION_PREDICTIONS))
+  )
+  if (predictions.length > 0) {
+    let avgPrediction = new Prediction(
+      normalizeNumberArrays(predictions.map(it => it.data)),
+      normalizeNumberArrays(predictions.map(it => it.dataNormalized)),
+      predictions.reduce((prev, curr) => prev + curr.correctness, 0) / predictions.length
+    )
+    PREDICTIONS.data(avgPrediction, sample)
+  }
+}
+
+function elementwiseAdd(a: number[], b: number[]) {
+  return a.map((value, index) => a[index] + b[index])
+}
+function elementwiseMult(a: number[], b: number[]) {
+  return a.map((value, index) => a[index] * b[index])
+}
+function elementwiseMultScalar(a: number[], b: number) {
+  return a.map(value => value * b)
+}
+
+function normalizeNumberArrays(sources: number[][]) {
+  return elementwiseMultScalar(
+    sources.reduce(
+      (prev, curr) => elementwiseAdd(prev, curr),
+      sources[0].map(it => 0)
+    ),
+    (1 / sources.length)
+  )
 }
 
 function fireCurrentUpdateQuery() {
