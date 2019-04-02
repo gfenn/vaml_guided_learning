@@ -29,11 +29,31 @@ let PREDICTION_MAP_STRAIGHT = [
   [0.03, 0.1, 0.2, 0.1, 0.03],
   [0.01, 0.05, 0.1, 0.05, 0.01],
 ].flat()
+let PREDICTION_MAP_LEFT = [
+  [0.08, 0.05, 0.03, 0.01, 0.0],
+  [0.1, 0.08, 0.05, 0.03, 0.01],
+  [0.5, 0.3, 0.1, 0.05, 0.01],
+  [0.8, 0.5, 0.3, 0.1, 0.05],
+  [1.0, 0.9, 0.5, 0.3, 0.1],
+  [0.8, 0.5, 0.3, 0.1, 0.05],
+  [0.5, 0.3, 0.1, 0.05, 0.01],
+  [0.1, 0.08, 0.05, 0.03, 0.01],
+].flat()
+let PREDICTION_MAP_RIGHT = [
+  [0.01, 0.03, 0.05, 0.08, 0.1],
+  [0.01, 0.05, 0.1, 0.3, 0.5],
+  [0.05, 0.1, 0.3, 0.5, 0.8],
+  [0.1, 0.3, 0.5, 0.9, 1.0],
+  [0.05, 0.1, 0.3, 0.5, 0.8],
+  [0.01, 0.05, 0.1, 0.3, 0.5],
+  [0.01, 0.03, 0.05, 0.08, 0.1],
+  [0.0, 0.01, 0.03, 0.05, 0.08],
+].flat()
 
 let PREDICTION_MOCK_DATA = {
   'Straight': PREDICTION_MAP_STRAIGHT,
-  'Left': PREDICTION_MAP_STRAIGHT,
-  'Right': PREDICTION_MAP_STRAIGHT
+  'Left': PREDICTION_MAP_LEFT,
+  'Right': PREDICTION_MAP_RIGHT
 }
 
 // =============================================
@@ -76,12 +96,13 @@ function generateMockPredictionData(sample: string = 'Straight', accuracy: numbe
 }
 
 // Generates mock labels, assigning 0 (bad), 1 (neutral) or 2 (good) to each action index.
-function generateMockPredictionLabels(): number[] {
-  let mockData: number[] = []
-  for (let idx = 0; idx < 40; idx++) {
-    mockData.push(Math.floor(Math.random()*3))
-  }
-  return mockData
+function generateMockPredictionLabels(sample: string = 'Straight'): number[] {
+  return PREDICTION_MOCK_DATA[sample]
+    .map(v => {
+      if (v <= 0.2) return 0;
+      if (v <= 0.6) return 1;
+      return 2;
+    })
 }
 
 // Rounds the value to the given number of significant figures.
@@ -363,7 +384,7 @@ class DataCollector {
   async getAllSamples(): Promise<Sample[]> {
     // TODO -> have samples stored and return them with ththis query
     let samples = ["Straight", "Left", "Right"].map(sample => {
-      return new Sample(sample)
+      return new Sample(sample, generateMockPredictionLabels(sample))
     })
     return Promise.resolve(samples)
     // return fetch('data/all_samples')
