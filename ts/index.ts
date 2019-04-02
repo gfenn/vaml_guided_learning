@@ -1,7 +1,6 @@
 // Author: Grant Fennessy
 
 // - Constants -
-// TODO: DELETE THIS
 let ALL_RUN_COUNT = 6
 let FINISHED_RUN_COUNT = 5
 let CURRENT_RUN_ID = 6
@@ -19,8 +18,23 @@ let STEERING_VALUES = [-0.5, -0.1, 0, 0.1, 0.5]
 let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
 
 
+// Mock Data
+let PREDICTION_MAP_STRAIGHT = [
+  [0.01, 0.05, 0.1, 0.05, 0.01],
+  [0.05, 0.1, 0.5, 0.1, 0.05],
+  [0.1, 0.4, 0.8, 0.4, 0.1],
+  [0.2, 0.6, 1.0, 0.6, 0.2],
+  [0.1, 0.4, 0.8, 0.4, 0.1],
+  [0.05, 0.2, 0.5, 0.2, 0.05],
+  [0.03, 0.1, 0.2, 0.1, 0.03],
+  [0.01, 0.05, 0.1, 0.05, 0.01],
+].flat()
 
-
+let PREDICTION_MOCK_DATA = {
+  'Straight': PREDICTION_MAP_STRAIGHT,
+  'Left': PREDICTION_MAP_STRAIGHT,
+  'Right': PREDICTION_MAP_STRAIGHT
+}
 
 // =============================================
 // =============================================
@@ -44,18 +58,20 @@ function normalizeValues(values: number[]) {
 
 // Generates pseudo-random data to populate the action predictions, including
 // applying softmax on the data.
-function generateMockPredictionData(): number[] {
-  let mockData: number[] = []
-  for (let idx = 0; idx < NUM_ACTIONS; idx++) {
-    mockData.push(Math.pow(Math.random(), 4) * 2)
-  }
+function generateMockPredictionData(sample: string = 'Straight', accuracy: number = 0.8): number[] {
+  // Apply accuracy randomness
+  mock = PREDICTION_MOCK_DATA[sample]
+    .map(v => {
+      if (Math.random() > accuracy) {
+        return Math.random() * 2 - 1 + v
+      }
+      return v
+    })
+    .map(v => Math.pow(Math.max(v, 0), 1 + Math.abs(accuracy)))
 
-  // Boost a couple
-  mockData[Math.floor(Math.random() * NUM_ACTIONS)] += 0.3
-  mockData[Math.floor(Math.random() * NUM_ACTIONS)] += 0.6
-
-  let total = mockData.reduce((p, value) => p + Math.exp(value), 0)
-  let softmax = mockData.map(v => Math.exp(v) / total)
+  // Determine softmax
+  let total = mock.reduce((p, value) => p + Math.exp(value), 0)
+  let softmax = mock.map(v => Math.exp(v) / total)
   return softmax
 }
 
@@ -367,7 +383,7 @@ class DataCollector {
       .then(data => {
         let values = normalizeValues(data.points.map(p => p.y))
         let steps = values.map(v => {
-          let mockData: number[] = generateMockPredictionData()
+          let mockData: number[] = generateMockPredictionData(sample.name, v + 0.1)
           return Prediction.build(mockData, v, sample.labels)
         })
 
