@@ -1821,6 +1821,8 @@ function setSelectedStep(step: number = -1, manual: boolean = true) {
   IS_MANUAL_SELECTION = manual
   SELECTED_STEPS = [step]
   updateSelections()
+
+  document.getElementById('step').value = ''
 }
 
 function setSelectionRange(step_0: number = -1, step_1: number = -1) {
@@ -1834,6 +1836,8 @@ function setSelectionRange(step_0: number = -1, step_1: number = -1) {
   IS_MANUAL_SELECTION = true
   SELECTED_STEPS = [step_0, step_1]
   updateSelections()
+
+  document.getElementById('step').value = ''
 }
 
 function updateSelections() {
@@ -1938,6 +1942,7 @@ function reversePopulateEventMetadata(metadata: EventMetadata) {
   document.getElementById('learning-rate').value = metadata.learningRate
   document.getElementById('exploration-rate').value = metadata.explorationRate
   document.getElementById('reward-shift').value = metadata.rewardShift
+  document.getElementById('step').value = metadata.step
 }
 
 function createEvent(step: number, name: string = null, metadata: EventMetadata = null) {
