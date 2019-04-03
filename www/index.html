@@ -8,29 +8,25 @@
     </head>
     <body>
 
-        <!-- Websocket components -->
-        <!--<script>-->
-            <!--var ws = new WebSocket("ws://localhost:${WEBSOCKET_PORT}/"),-->
-                <!--messages = document.createElement('ul');-->
-            <!--ws.onmessage = function (event) {-->
-                <!--var messages = document.getElementsByTagName('ul')[0],-->
-                    <!--message = document.createElement('li'),-->
-                    <!--content = document.createTextNode(event.data);-->
-                <!--message.appendChild(content);-->
-                <!--messages.appendChild(message);-->
-            <!--};-->
-            <!--document.body.appendChild(messages);-->
-        <!--</script>-->
-
-        <svg width=800 height=900 transform="translate(10, 10)">
-          <g id="rewards-chart" transform="translate(100, 50)"></g>
-          <g id="spectrograms" transform="translate(100, 280)"></g>
-          <g id="predictions" transform="translate(350, 470)"></g>
+        <svg width=1400 height=700>
+          <g id="rewards-chart" transform="translate(60, 50)"></g>
+          <g id="spectrograms" transform="translate(60, 280)"></g>
+          <g id="predictions" transform="translate(850, 300)"></g>
         </svg>
 
-        <button id="reset" style="top: 30px">Reset</button>
-        <button id="stop" style="top: 50px">Start</button>
-        <button id="event" style="top: 70px">Event</button>
+        <div id="event-panel">
+          <h1>Event Parameters</h1>
+          <div class="input-pair"><input id="learning-rate" value="0.01">Learning Rate</input></div>
+          <div class="input-pair"><input id="exploration-rate" value="0.1">Exploration Rate</input></div>
+          <div class="input-pair"><input id="reward-shift" value="0.001">Reward Shift</input></div>
+          <div class="input-pair"><input id="step" value="" disabled class="disabled">Step</input></div>
+
+          <div class="event-control">
+            <button id="new-episode" style="left: 30px">New Episode</button>
+            <button id="new-event" style="left: 150px">Create Event</button>
+          </div>
+        </div>
+
 
 
 

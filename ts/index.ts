@@ -1,7 +1,6 @@
 // Author: Grant Fennessy
 
 // - Constants -
-// TODO: DELETE THIS
 let ALL_RUN_COUNT = 6
 let FINISHED_RUN_COUNT = 5
 let CURRENT_RUN_ID = 6
@@ -19,8 +18,43 @@ let STEERING_VALUES = [-0.5, -0.1, 0, 0.1, 0.5]
 let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
 
 
+// Mock Data
+let PREDICTION_MAP_STRAIGHT = [
+  [0.01, 0.05, 0.1, 0.05, 0.01],
+  [0.05, 0.1, 0.5, 0.1, 0.05],
+  [0.1, 0.4, 0.8, 0.4, 0.1],
+  [0.2, 0.6, 1.0, 0.6, 0.2],
+  [0.1, 0.4, 0.8, 0.4, 0.1],
+  [0.05, 0.2, 0.5, 0.2, 0.05],
+  [0.03, 0.1, 0.2, 0.1, 0.03],
+  [0.01, 0.05, 0.1, 0.05, 0.01],
+].flat()
+let PREDICTION_MAP_LEFT = [
+  [0.08, 0.05, 0.03, 0.01, 0.0],
+  [0.1, 0.08, 0.05, 0.03, 0.01],
+  [0.5, 0.3, 0.1, 0.05, 0.01],
+  [0.8, 0.5, 0.3, 0.1, 0.05],
+  [1.0, 0.9, 0.5, 0.3, 0.1],
+  [0.8, 0.5, 0.3, 0.1, 0.05],
+  [0.5, 0.3, 0.1, 0.05, 0.01],
+  [0.1, 0.08, 0.05, 0.03, 0.01],
+].flat()
+let PREDICTION_MAP_RIGHT = [
+  [0.01, 0.03, 0.05, 0.08, 0.1],
+  [0.01, 0.05, 0.1, 0.3, 0.5],
+  [0.05, 0.1, 0.3, 0.5, 0.8],
+  [0.1, 0.3, 0.5, 0.9, 1.0],
+  [0.05, 0.1, 0.3, 0.5, 0.8],
+  [0.01, 0.05, 0.1, 0.3, 0.5],
+  [0.01, 0.03, 0.05, 0.08, 0.1],
+  [0.0, 0.01, 0.03, 0.05, 0.08],
+].flat()
 
-
+let PREDICTION_MOCK_DATA = {
+  'Straight': PREDICTION_MAP_STRAIGHT,
+  'Left': PREDICTION_MAP_LEFT,
+  'Right': PREDICTION_MAP_RIGHT
+}
 
 // =============================================
 // =============================================
@@ -44,28 +78,31 @@ function normalizeValues(values: number[]) {
 
 // Generates pseudo-random data to populate the action predictions, including
 // applying softmax on the data.
-function generateMockPredictionData(): number[] {
-  let mockData: number[] = []
-  for (let idx = 0; idx < NUM_ACTIONS; idx++) {
-    mockData.push(Math.pow(Math.random(), 4) * 2)
-  }
+function generateMockPredictionData(sample: string = 'Straight', accuracy: number = 0.8): number[] {
+  // Apply accuracy randomness
+  let mock = PREDICTION_MOCK_DATA[sample]
+    .map(v => {
+      if (Math.random() > accuracy) {
+        return Math.random() * 2 - 1 + v
+      }
+      return v
+    })
+    .map(v => Math.pow(Math.max(v, 0), 1 + Math.abs(accuracy)))
 
-  // Boost a couple
-  mockData[Math.floor(Math.random() * NUM_ACTIONS)] += 0.3
-  mockData[Math.floor(Math.random() * NUM_ACTIONS)] += 0.6
-
-  let total = mockData.reduce((p, value) => p + Math.exp(value), 0)
-  let softmax = mockData.map(v => Math.exp(v) / total)
+  // Determine softmax
+  let total = mock.reduce((p, value) => p + Math.exp(value), 0)
+  let softmax = mock.map(v => Math.exp(v) / total)
   return softmax
 }
 
 // Generates mock labels, assigning 0 (bad), 1 (neutral) or 2 (good) to each action index.
-function generateMockPredictionLabels(): number[] {
-  let mockData: number[] = []
-  for (let idx = 0; idx < 40; idx++) {
-    mockData.push(Math.floor(Math.random()*3))
-  }
-  return mockData
+function generateMockPredictionLabels(sample: string = 'Straight'): number[] {
+  return PREDICTION_MOCK_DATA[sample]
+    .map(v => {
+      if (v <= 0.2) return 0;
+      if (v <= 0.6) return 1;
+      return 2;
+    })
 }
 
 // Rounds the value to the given number of significant figures.
@@ -185,12 +222,11 @@ class Prediction {
   dataNormalized: number[]
   // correctness value (0 to 1)
   correctness: number
-  constructor(data: number[], correctness: number, labels: number[]) {
-    this.data = data
 
+  static build(data: number[], correctness: number, labels: number[]) {
     // let max = data.reduce((p, v) => v > p ? v : p, data[0])
     // this.dataNormalized = data.map(v => v / max)
-    this.dataNormalized = normalizeValues(data)
+    let dataNormalized = normalizeValues(data)
 
     // // Measure the correctness
     // TODO - when no longer using mock data, determine correctness score
@@ -199,6 +235,12 @@ class Prediction {
     //   return probability * (labels[index] / 3)
     // })
     // this.correctness = score.reduce((p, c) => p + c, 0) / score.length
+    return new Prediction(data, dataNormalized, correctness)
+  }
+
+  constructor(data: number[], dataNormalized: number[], correctness: number) {
+    this.data = data
+    this.dataNormalized = dataNormalized
     this.correctness = correctness
   }
 }
@@ -222,6 +264,19 @@ class PredictionsForRun {
     this.sample = sample
     this.run = run
     this.predictions = predictions
+  }
+  predictionForStep(step: number) {
+    let last = this.predictions.length - 1
+    return this.predictions[Math.min(step, last)]
+  }
+  predictionsForRange(steps: number[]) {
+    let last = this.predictions.length - 1
+    let s0 = Math.min(steps[0], last)
+    let s1 = Math.min(steps[1], last)
+    if (s0 > s1) {
+      let tmp = s0; s0 = s1; s1 = tmp;
+    }
+    return this.predictions.slice(s0, s1 + 1)
   }
 }
 
@@ -250,12 +305,29 @@ class SampleDataRepo {
   }
 }
 
+class EventMetadata {
+  learningRate: number
+  explorationRate: number
+  rewardShift: number
+  step: number
+  constructor(learningRate: number, explorationRate: number, rewardShift: number, step: number) {
+    this.learningRate = learningRate
+    this.explorationRate = explorationRate
+    this.rewardShift = rewardShift
+    this.step = step
+  }
+}
+
 class EpisodeEvent {
   step: number
   name: string
-  constructor(step: number, name: string) {
+  id: string
+  metadata: EventMetadata
+  constructor(step: number, name: string, metadata: EventMetadata) {
     this.step = step
     this.name = name
+    this.id = name.replace(/\s+/g, '')
+    this.metadata = metadata
   }
 }
 
@@ -329,7 +401,7 @@ class DataCollector {
   async getAllSamples(): Promise<Sample[]> {
     // TODO -> have samples stored and return them with ththis query
     let samples = ["Straight", "Left", "Right"].map(sample => {
-      return new Sample(sample)
+      return new Sample(sample, generateMockPredictionLabels(sample))
     })
     return Promise.resolve(samples)
     // return fetch('data/all_samples')
@@ -349,8 +421,8 @@ class DataCollector {
       .then(data => {
         let values = normalizeValues(data.points.map(p => p.y))
         let steps = values.map(v => {
-          let mockData: number[] = generateMockPredictionData()
-          return new Prediction(mockData, v, sample.labels)
+          let mockData: number[] = generateMockPredictionData(sample.name, v + 0.1)
+          return Prediction.build(mockData, v, sample.labels)
         })
 
         return new PredictionsForRun(sample, run_id, steps)
@@ -959,7 +1031,9 @@ class RewardsGraph extends ShapeRegion {
   private _selectedEvent: string = null
 
   private _backgroundG: any
-  private _selectionG: any
+  private _selectionG_Range: any // Used for range
+  private _selectionG_1: any
+  private _selectionG_2: any // Used for range
   private _eventsG: any
 
   constructor() {
@@ -977,20 +1051,15 @@ class RewardsGraph extends ShapeRegion {
       .attr('stroke', 'lightgray')
 
     // The selection line goes on the background - might need to move this forward.
-    this._selectionG = this._backgroundG
-      .append('g')
-      .attr('class', 'selection')
-    this._selectionG
-      .append('line')
-      .attr('y2', this.size.height)
-      .attr('stroke', '#00b3b3')
-    this._selectionG
-      .append('text')
-      .attr('class', 'selectionText')
-      .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
-      .attr('font-size', 10)
-      .attr('fill', '#00b3b3')
-      .text('Step: 0')
+    this._selectionG_Range = this._backgroundG
+      .append('rect')
+      .attr('class', 'rangeBG')
+      .attr('width', '0')
+      .attr('height', this.size.height)
+      .attr('visibility', 'hidden')
+    this._selectionG_1 = this.buildSelectionLine()
+    this._selectionG_2 = this.buildSelectionLine()
+    this._selectionG_2.attr('visibility', 'hidden')
 
     this._eventsG = this._backgroundG
       .append('g')
@@ -1004,7 +1073,11 @@ class RewardsGraph extends ShapeRegion {
       .on('mousedown', function() {
         let coords = d3.mouse(this)
         let step = self._xAxis.domain.invert(coords[0])
-        setSelectedStep(Math.round(step))
+        if (d3.event.shiftKey)
+          setSelectionRange(SELECTED_STEPS[0], step)
+        else
+          setSelectedStep(Math.round(step))
+        REWARDS_GRAPH.deselectEvents()
       })
 
 
@@ -1014,6 +1087,28 @@ class RewardsGraph extends ShapeRegion {
 
     // Put the X axis on top
     this._xAxis.top = true
+  }
+
+  private buildSelectionLine(): any {
+    // Create g
+    let selectionG = this._backgroundG
+      .append('g')
+      .attr('class', 'selection')
+
+    // Add line
+    selectionG
+      .append('line')
+      .attr('class', 'selectionLine')
+      .attr('y2', this.size.height)
+
+    // Add text
+    selectionG
+      .append('text')
+      .attr('class', 'selectionText')
+      .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
+      .text('Step: 0')
+
+    return selectionG
   }
 
   // Builds a curve boxplot shape with filler data, then hides it.  Pre-building
@@ -1037,7 +1132,41 @@ class RewardsGraph extends ShapeRegion {
   // Selects a step, updating the selection line and text.
   selectStep(step: number) {
     let x = this._xAxis.domain(step)
-    this._selectionG.attr('transform', 'translate(' + x + ', 0)')
+    this.positionSelectionBar(step, x, this._selectionG_1)
+    this._selectionG_2.attr('visibility', 'hidden')
+    this._selectionG_Range.attr('visibility', 'hidden')
+  }
+
+  selectStepRange(range: number[]) {
+    // Out of order?
+    let r0 = range[0]
+    let r1 = range[1]
+    if (r0 > r1) {
+      r0 = range[1]
+      r1 = range[0]
+    }
+
+    // Position bars
+    let x0 = this._xAxis.domain(r0)
+    let x1 = this._xAxis.domain(r1)
+
+    // Store
+    this.positionSelectionBar(r0, x0, this._selectionG_1)
+    this.positionSelectionBar(r1, x1, this._selectionG_2)
+
+    // Position background
+    this._selectionG_Range
+      .attr('x', x0)
+      .attr('width', x1 - x0)
+
+    // Enabled visibility
+    this._selectionG_2.attr('visibility', 'visible')
+    this._selectionG_Range.attr('visibility', 'visible')
+  }
+
+  private positionSelectionBar(step: number, x: number, selectionG: any) {
+    // Update position
+    selectionG.attr('transform', 'translate(' + x + ', 0)')
 
     let transformX
     let anchor
@@ -1049,7 +1178,7 @@ class RewardsGraph extends ShapeRegion {
       transformX = 3
       anchor = 'begin'
     }
-    this._selectionG.select('text')
+    selectionG.select('text')
       .attr('transform', 'translate(' + transformX + ', ' + (this.size.height - 4) + ')')
       .attr('text-anchor', anchor)
       .text('Step: ' + formatStep(step))
@@ -1099,6 +1228,7 @@ class RewardsGraph extends ShapeRegion {
         // If automatic selection, select last step
         if (!IS_MANUAL_SELECTION) {
           setSelectedStep(-1, false)
+          REWARDS_GRAPH.deselectEvents()
         }
       })
   }
@@ -1114,7 +1244,7 @@ class RewardsGraph extends ShapeRegion {
     // Create event group w/ transform
     let eventG = this._eventsG
       .append('g')
-      .attr('id', event.name)
+      .attr('id', event.id)
       .attr('class', 'event')
       .attr('transform', 'translate(' + this._xAxis.domain(event.step) + ', 0)')
 
@@ -1166,9 +1296,15 @@ class RewardsGraph extends ShapeRegion {
     }
     else {
       this._selectedEvent = event.name
-      this._eventsG.selectAll('#' + event.name).attr('class', 'event selected')
-      setSelectedStep(event.step, true)
+      this._eventsG.selectAll('#' + event.id).attr('class', 'event selected')
+
+      if (d3.event != null && d3.event.shiftKey)
+        setSelectionRange(SELECTED_STEPS[0], event.step)
+      else
+        setSelectedStep(event.step, true)
     }
+
+    reversePopulateEventMetadata(event.metadata)
   }
 
   deselectEvents() {
@@ -1302,6 +1438,7 @@ class Spectrogram extends SimpleG {
       if (coords[0] > 0 && coords[0] <= self.width) {
         let step = self.xDomain.invert(coords[0]) * DATA_COMPRESSION_PREDICTIONS
         setSelectedStep(Math.round(step))
+        REWARDS_GRAPH.deselectEvents()
       }
     })
 
@@ -1626,7 +1763,7 @@ class PredictionMatrix extends ShapeRegion {
 // directly influence the application state.
 
 // State values
-let SELECTED_STEP: number = 0
+let SELECTED_STEPS: number[] = [0]
 let SELECTED_SAMPLE: string = ''
 let IS_MANUAL_SELECTION: boolean = false
 let UPDATE_ON: boolean = false
@@ -1642,6 +1779,12 @@ let EVENTS: EpisodeEvent[] = []
 REWARDS_GRAPH.loadCurveBoxplotData()
   .then(() => {
     fireCurrentUpdateQuery()
+  })
+  .then(() => {
+    createEvent(0, 'Start', new EventMetadata(0.0001, 0.3, 0.01, 0))
+    createEvent(1000000, 'Phase 2', new EventMetadata(0.00001, 0.1, 0.001, 1000000))
+    createEvent(2000000, 'Phase 3', new EventMetadata(0.000001, 0.05, 0, 2000000))
+    REWARDS_GRAPH.deselectEvents()
   })
 
 // Populate the spectrogram area + predictions matrix
@@ -1669,34 +1812,104 @@ function setSelectedSample(sample: string) {
 function setSelectedStep(step: number = -1, manual: boolean = true) {
   // Double click?
   let last = REWARDS_GRAPH.lastStep()
-  if (IS_MANUAL_SELECTION && manual && step == SELECTED_STEP) {
-    manual = true
-    step = -1
-  }
-  if (step == -1) {
-    step = last
-  }
-  if (step > last) {
+  if (step == -1 || step > last) {
     step = last
     manual = false
   }
 
   // Select
   IS_MANUAL_SELECTION = manual
-  SELECTED_STEP = step
-  REWARDS_GRAPH.selectStep(step)
+  SELECTED_STEPS = [step]
   updateSelections()
+
+  document.getElementById('step').value = ''
+}
+
+function setSelectionRange(step_0: number = -1, step_1: number = -1) {
+  // Both -1?
+  if (step_0 == step_1 && step_1 == -1) {
+    setSelectedStep(-1, false)
+    return
+  }
+
+  // Set range
+  IS_MANUAL_SELECTION = true
+  SELECTED_STEPS = [step_0, step_1]
+  updateSelections()
+
+  document.getElementById('step').value = ''
 }
 
 function updateSelections() {
+  // Attempt to get the run predictions and the sample from the data
+  let runPredictions: PredictionsForRun = null
+  let sample: Sample = null
   if (STORED_DATA != null) {
     let sampleData = STORED_DATA.map[SELECTED_SAMPLE]
-    let row = sampleData.runs[CURRENT_RUN_ID - 1]
-    if (row != null) {
-      let stepIndex = Math.min(Math.floor(SELECTED_STEP / DATA_COMPRESSION_PREDICTIONS), row.predictions.length-1)
-      PREDICTIONS.data(row.predictions[stepIndex], sampleData.sample)
+    if (sampleData != null) {
+      runPredictions = sampleData.runs[CURRENT_RUN_ID - 1]
+      sample = sampleData.sample
     }
   }
+
+  // Do a single or range selection
+  if (SELECTED_STEPS.length == 1) {
+    applySingleSelection(runPredictions, sample)
+  }
+  else {
+    applyRangeSelection(runPredictions, sample)
+  }
+}
+
+function applySingleSelection(runPredictions: PredictionsForRun, sample: Sample) {
+  // Select the rewards graph
+  REWARDS_GRAPH.selectStep(SELECTED_STEPS[0])
+
+  // Select predictions
+  if (runPredictions != null) {
+    let step = Math.floor(SELECTED_STEPS[0] / DATA_COMPRESSION_PREDICTIONS)
+    let prediction = runPredictions.predictionForStep(step)
+    PREDICTIONS.data(prediction, sample)
+  }
+}
+
+function applyRangeSelection(runPredictions: PredictionsForRun, sample: Sample) {
+  // Select the rewards graph
+  REWARDS_GRAPH.selectStepRange(SELECTED_STEPS)
+
+  // Prediction range
+  let predictions = runPredictions.predictionsForRange(
+    SELECTED_STEPS.map(it =>
+      Math.floor(it / DATA_COMPRESSION_PREDICTIONS))
+  )
+  if (predictions.length > 0) {
+    let avgPrediction = new Prediction(
+      normalizeNumberArrays(predictions.map(it => it.data)),
+      normalizeNumberArrays(predictions.map(it => it.dataNormalized)),
+      predictions.reduce((prev, curr) => prev + curr.correctness, 0) / predictions.length
+    )
+    PREDICTIONS.data(avgPrediction, sample)
+  }
+}
+
+function elementwiseAdd(a: number[], b: number[]) {
+  return a.map((value, index) => a[index] + b[index])
+}
+function elementwiseMult(a: number[], b: number[]) {
+  return a.map((value, index) => a[index] * b[index])
+}
+function elementwiseMultScalar(a: number[], b: number) {
+  return a.map(value => value * b)
+}
+
+function normalizeNumberArrays(sources: number[][]) {
+  return elementwiseMultScalar(
+    sources.reduce(
+      (prev, curr) => elementwiseAdd(prev, curr),
+      sources[0].map(it => 0)
+    ),
+    (1 / sources.length)
+  )
 }
 
 function fireCurrentUpdateQuery() {
@@ -1716,8 +1929,30 @@ function setUpdatesEnabled(enabled: boolean) {
   }
 }
 
-function createEvent(step: number) {
-  let event = new EpisodeEvent(step, 'Event' + (EVENTS.length + 1))
+function generateEventMetadata(step: number) {
+  return new EventMetadata(
+    parseFloat(document.getElementById("learning-rate").value),
+    parseFloat(document.getElementById("exploration-rate").value),
+    parseFloat(document.getElementById("reward-shift").value),
+    step
+  );
+}
+
+function reversePopulateEventMetadata(metadata: EventMetadata) {
+  document.getElementById('learning-rate').value = metadata.learningRate
+  document.getElementById('exploration-rate').value = metadata.explorationRate
+  document.getElementById('reward-shift').value = metadata.rewardShift
+  document.getElementById('step').value = metadata.step
+}
+
+function createEvent(step: number, name: string = null, metadata: EventMetadata = null) {
+  if (name == null) {
+    name = 'Event' + (EVENTS.length + 1)
+  }
+  if (metadata == null) {
+    metadata = generateEventMetadata(step)
+  }
+  let event = new EpisodeEvent(step, name, metadata)
   EVENTS.push(event)
   REWARDS_GRAPH.addEvent(event)
 }
@@ -1727,7 +1962,7 @@ function clearEvents() {
   REWARDS_GRAPH.clearEvents()
 }
 
-d3.select('#reset').on('mousedown', () => {
+d3.select('#new-episode').on('mousedown', () => {
   setUpdatesEnabled(true)
   clearEvents()
   DATA.resetCurrent()
@@ -1736,11 +1971,7 @@ d3.select('#reset').on('mousedown', () => {
     })
 })
 
-d3.select('#stop').on('mousedown', () => {
-  setUpdatesEnabled(!UPDATE_ON)
-})
-
-d3.select('#event').on('mousedown', () => {
+d3.select('#new-event').on('mousedown', () => {
   createEvent(REWARDS_GRAPH.lastStep())
   // createEvent(SELECTED_STEP)
 })
