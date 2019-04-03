@@ -80,7 +80,7 @@ function normalizeValues(values: number[]) {
 // applying softmax on the data.
 function generateMockPredictionData(sample: string = 'Straight', accuracy: number = 0.8): number[] {
   // Apply accuracy randomness
-  mock = PREDICTION_MOCK_DATA[sample]
+  let mock = PREDICTION_MOCK_DATA[sample]
     .map(v => {
       if (Math.random() > accuracy) {
         return Math.random() * 2 - 1 + v
@@ -1060,6 +1060,7 @@ class RewardsGraph extends ShapeRegion {
           setSelectionRange(SELECTED_STEPS[0], step)
         else
           setSelectedStep(Math.round(step))
+        REWARDS_GRAPH.deselectEvents()
       })
 
 
@@ -1210,6 +1211,7 @@ class RewardsGraph extends ShapeRegion {
         // If automatic selection, select last step
         if (!IS_MANUAL_SELECTION) {
           setSelectedStep(-1, false)
+          REWARDS_GRAPH.deselectEvents()
         }
       })
   }
@@ -1278,7 +1280,11 @@ class RewardsGraph extends ShapeRegion {
     else {
       this._selectedEvent = event.name
       this._eventsG.selectAll('#' + event.name).attr('class', 'event selected')
-      setSelectedStep(event.step, true)
+
+      if (d3.event != null && d3.event.shiftKey)
+        setSelectionRange(SELECTED_STEPS[0], event.step)
+      else
+        setSelectedStep(event.step, true)
     }
   }
 
@@ -1413,6 +1419,7 @@ class Spectrogram extends SimpleG {
       if (coords[0] > 0 && coords[0] <= self.width) {
         let step = self.xDomain.invert(coords[0]) * DATA_COMPRESSION_PREDICTIONS
         setSelectedStep(Math.round(step))
+        REWARDS_GRAPH.deselectEvents()
       }
     })
 
@@ -1754,6 +1761,12 @@ REWARDS_GRAPH.loadCurveBoxplotData()
   .then(() => {
     fireCurrentUpdateQuery()
   })
+  .then(() => {
+    createEvent(0, 'Start')
+    createEvent(1000000)
+    createEvent(2000000)
+    REWARDS_GRAPH.deselectEvents()
+  })
 
 // Populate the spectrogram area + predictions matrix
 
@@ -1893,8 +1906,11 @@ function setUpdatesEnabled(enabled: boolean) {
   }
 }
 
-function createEvent(step: number) {
-  let event = new EpisodeEvent(step, 'Event' + (EVENTS.length + 1))
+function createEvent(step: number, name: string = null) {
+  if (name == null) {
+    name = 'Event' + (EVENTS.length + 1)
+  }
+  let event = new EpisodeEvent(step, name)
   EVENTS.push(event)
   REWARDS_GRAPH.addEvent(event)
 }
@@ -1904,7 +1920,7 @@ function clearEvents() {
   REWARDS_GRAPH.clearEvents()
 }
 
-d3.select('#reset').on('mousedown', () => {
+d3.select('#new-episode').on('mousedown', () => {
   setUpdatesEnabled(true)
   clearEvents()
   DATA.resetCurrent()
@@ -1913,11 +1929,7 @@ d3.select('#reset').on('mousedown', () => {
     })
 })
 
-d3.select('#stop').on('mousedown', () => {
-  setUpdatesEnabled(!UPDATE_ON)
-})
-
-d3.select('#event').on('mousedown', () => {
+d3.select('#new-event').on('mousedown', () => {
   createEvent(REWARDS_GRAPH.lastStep())
   // createEvent(SELECTED_STEP)
 })
