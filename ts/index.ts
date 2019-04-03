@@ -305,12 +305,29 @@ class SampleDataRepo {
   }
 }
 
+class EventMetadata {
+  learningRate: number
+  explorationRate: number
+  rewardShift: number
+  step: number
+  constructor(learningRate: number, explorationRate: number, rewardShift: number, step: number) {
+    this.learningRate = learningRate
+    this.explorationRate = explorationRate
+    this.rewardShift = rewardShift
+    this.step = step
+  }
+}
+
 class EpisodeEvent {
   step: number
   name: string
-  constructor(step: number, name: string) {
+  id: string
+  metadata: EventMetadata
+  constructor(step: number, name: string, metadata: EventMetadata) {
     this.step = step
     this.name = name
+    this.id = name.replace(/\s+/g, '')
+    this.metadata = metadata
   }
 }
 
@@ -1227,7 +1244,7 @@ class RewardsGraph extends ShapeRegion {
     // Create event group w/ transform
     let eventG = this._eventsG
       .append('g')
-      .attr('id', event.name)
+      .attr('id', event.id)
       .attr('class', 'event')
       .attr('transform', 'translate(' + this._xAxis.domain(event.step) + ', 0)')
 
@@ -1279,13 +1296,15 @@ class RewardsGraph extends ShapeRegion {
     }
     else {
       this._selectedEvent = event.name
-      this._eventsG.selectAll('#' + event.name).attr('class', 'event selected')
+      this._eventsG.selectAll('#' + event.id).attr('class', 'event selected')
 
       if (d3.event != null && d3.event.shiftKey)
         setSelectionRange(SELECTED_STEPS[0], event.step)
       else
         setSelectedStep(event.step, true)
     }
+
+    reversePopulateEventMetadata(event.metadata)
   }
 
   deselectEvents() {
@@ -1762,9 +1781,9 @@ REWARDS_GRAPH.loadCurveBoxplotData()
     fireCurrentUpdateQuery()
   })
   .then(() => {
-    createEvent(0, 'Start')
-    createEvent(1000000)
-    createEvent(2000000)
+    createEvent(0, 'Start', new EventMetadata(0.0001, 0.3, 0.01, 0))
+    createEvent(1000000, 'Phase 2', new EventMetadata(0.00001, 0.1, 0.001, 1000000))
+    createEvent(2000000, 'Phase 3', new EventMetadata(0.000001, 0.05, 0, 2000000))
     REWARDS_GRAPH.deselectEvents()
   })
 
@@ -1906,11 +1925,29 @@ function setUpdatesEnabled(enabled: boolean) {
   }
 }
 
-function createEvent(step: number, name: string = null) {
+function generateEventMetadata(step: number) {
+  return new EventMetadata(
+    parseFloat(document.getElementById("learning-rate").value),
+    parseFloat(document.getElementById("exploration-rate").value),
+    parseFloat(document.getElementById("reward-shift").value),
+    step
+  );
+}
+
+function reversePopulateEventMetadata(metadata: EventMetadata) {
+  document.getElementById('learning-rate').value = metadata.learningRate
+  document.getElementById('exploration-rate').value = metadata.explorationRate
+  document.getElementById('reward-shift').value = metadata.rewardShift
+}
+
+function createEvent(step: number, name: string = null, metadata: EventMetadata = null) {
   if (name == null) {
     name = 'Event' + (EVENTS.length + 1)
   }
-  let event = new EpisodeEvent(step, name)
+  if (metadata == null) {
+    metadata = generateEventMetadata(step)
+  }
+  let event = new EpisodeEvent(step, name, metadata)
   EVENTS.push(event)
   REWARDS_GRAPH.addEvent(event)
 }
