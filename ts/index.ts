@@ -19,7 +19,7 @@ let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
 
 
 // Mock Data
-let PREDICTION_MAP_STRAIGHT = [
+let PREDICTION_MAP_STRAIGHT = ([
   [0.01, 0.05, 0.1, 0.05, 0.01],
   [0.05, 0.1, 0.5, 0.1, 0.05],
   [0.1, 0.4, 0.8, 0.4, 0.1],
@@ -28,8 +28,8 @@ let PREDICTION_MAP_STRAIGHT = [
   [0.05, 0.2, 0.5, 0.2, 0.05],
   [0.03, 0.1, 0.2, 0.1, 0.03],
   [0.01, 0.05, 0.1, 0.05, 0.01],
-].flat()
-let PREDICTION_MAP_LEFT = [
+] as any).flat()
+let PREDICTION_MAP_LEFT = ([
   [0.08, 0.05, 0.03, 0.01, 0.0],
   [0.1, 0.08, 0.05, 0.03, 0.01],
   [0.5, 0.3, 0.1, 0.05, 0.01],
@@ -38,8 +38,8 @@ let PREDICTION_MAP_LEFT = [
   [0.8, 0.5, 0.3, 0.1, 0.05],
   [0.5, 0.3, 0.1, 0.05, 0.01],
   [0.1, 0.08, 0.05, 0.03, 0.01],
-].flat()
-let PREDICTION_MAP_RIGHT = [
+] as any).flat()
+let PREDICTION_MAP_RIGHT = ([
   [0.01, 0.03, 0.05, 0.08, 0.1],
   [0.01, 0.05, 0.1, 0.3, 0.5],
   [0.05, 0.1, 0.3, 0.5, 0.8],
@@ -48,7 +48,7 @@ let PREDICTION_MAP_RIGHT = [
   [0.01, 0.05, 0.1, 0.3, 0.5],
   [0.01, 0.03, 0.05, 0.08, 0.1],
   [0.0, 0.01, 0.03, 0.05, 0.08],
-].flat()
+] as any).flat()
 
 let PREDICTION_MOCK_DATA = {
   'Straight': PREDICTION_MAP_STRAIGHT,
@@ -1079,6 +1079,15 @@ class RewardsGraph extends ShapeRegion {
           setSelectedStep(Math.round(step))
         REWARDS_GRAPH.deselectEvents()
       })
+      .call(d3.drag().on('start', function() {
+        d3.event.on('drag', function(d) {
+          let coords = d3.mouse(this)
+          let step = self._xAxis.domain.invert(coords[0])
+          if (step >= 0 && step <= 3000000) {
+            setSelectionRange(SELECTED_STEPS[0], step)
+          }
+        })
+      }))
 
 
     // Add a polygon and hide it
@@ -1822,7 +1831,7 @@ function setSelectedStep(step: number = -1, manual: boolean = true) {
   SELECTED_STEPS = [step]
   updateSelections()
 
-  document.getElementById('step').value = ''
+  setEventInputValue('step', '')
 }
 
 function setSelectionRange(step_0: number = -1, step_1: number = -1) {
@@ -1837,7 +1846,7 @@ function setSelectionRange(step_0: number = -1, step_1: number = -1) {
   SELECTED_STEPS = [step_0, step_1]
   updateSelections()
 
-  document.getElementById('step').value = ''
+  setEventInputValue('step', '')
 }
 
 function updateSelections() {
@@ -1929,20 +1938,29 @@ function setUpdatesEnabled(enabled: boolean) {
   }
 }
 
+function eventInputValue(name: string) {
+  let item = document.getElementById(name) as HTMLInputElement
+  return parseFloat(item.value)
+}
+function setEventInputValue(name: string, value: number|string) {
+  let item = document.getElementById(name) as HTMLInputElement
+  item.value = String(value)
+}
+
 function generateEventMetadata(step: number) {
   return new EventMetadata(
-    parseFloat(document.getElementById("learning-rate").value),
-    parseFloat(document.getElementById("exploration-rate").value),
-    parseFloat(document.getElementById("reward-shift").value),
+    eventInputValue("learning-rate"),
+    eventInputValue("exploration-rate"),
+    eventInputValue("reward-shift"),
     step
   );
 }
 
 function reversePopulateEventMetadata(metadata: EventMetadata) {
-  document.getElementById('learning-rate').value = metadata.learningRate
-  document.getElementById('exploration-rate').value = metadata.explorationRate
-  document.getElementById('reward-shift').value = metadata.rewardShift
-  document.getElementById('step').value = metadata.step
+  setEventInputValue('learning-rate', metadata.learningRate)
+  setEventInputValue('exploration-rate', metadata.explorationRate)
+  setEventInputValue('reward-shift', metadata.rewardShift)
+  setEventInputValue('step', metadata.step)
 }
 
 function createEvent(step: number, name: string = null, metadata: EventMetadata = null) {
