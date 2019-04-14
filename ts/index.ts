@@ -20,41 +20,75 @@ let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
 
 // Mock Data
 let PREDICTION_MAP_STRAIGHT = ([
-  [0.01, 0.05, 0.1, 0.05, 0.01],
-  [0.05, 0.1, 0.5, 0.1, 0.05],
-  [0.1, 0.4, 0.8, 0.4, 0.1],
-  [0.2, 0.6, 1.0, 0.6, 0.2],
-  [0.1, 0.4, 0.8, 0.4, 0.1],
-  [0.05, 0.2, 0.5, 0.2, 0.05],
-  [0.03, 0.1, 0.2, 0.1, 0.03],
-  [0.01, 0.05, 0.1, 0.05, 0.01],
+  [0.01, 0.05, 0.10, 0.05, 0.01],
+  [0.05, 0.10, 0.50, 0.10, 0.05],
+  [0.10, 0.40, 0.80, 0.40, 0.10],
+  [0.20, 0.60, 1.00, 0.60, 0.20],
+  [0.10, 0.40, 0.80, 0.40, 0.10],
+  [0.05, 0.20, 0.50, 0.20, 0.05],
+  [0.03, 0.10, 0.20, 0.10, 0.03],
+  [0.01, 0.05, 0.10, 0.05, 0.01],
 ] as any).flat()
 let PREDICTION_MAP_LEFT = ([
-  [0.08, 0.05, 0.03, 0.01, 0.0],
-  [0.1, 0.08, 0.05, 0.03, 0.01],
-  [0.5, 0.3, 0.1, 0.05, 0.01],
-  [0.8, 0.5, 0.3, 0.1, 0.05],
-  [1.0, 0.9, 0.5, 0.3, 0.1],
-  [0.8, 0.5, 0.3, 0.1, 0.05],
-  [0.5, 0.3, 0.1, 0.05, 0.01],
-  [0.1, 0.08, 0.05, 0.03, 0.01],
+  [0.08, 0.05, 0.03, 0.01, 0.00],
+  [0.10, 0.08, 0.05, 0.03, 0.01],
+  [0.50, 0.30, 0.10, 0.05, 0.01],
+  [0.80, 0.50, 0.30, 0.10, 0.05],
+  [1.00, 0.90, 0.50, 0.30, 0.10],
+  [0.80, 0.50, 0.30, 0.10, 0.05],
+  [0.50, 0.30, 0.10, 0.05, 0.01],
+  [0.10, 0.08, 0.05, 0.03, 0.01],
 ] as any).flat()
 let PREDICTION_MAP_RIGHT = ([
-  [0.01, 0.03, 0.05, 0.08, 0.1],
-  [0.01, 0.05, 0.1, 0.3, 0.5],
-  [0.05, 0.1, 0.3, 0.5, 0.8],
-  [0.1, 0.3, 0.5, 0.9, 1.0],
-  [0.05, 0.1, 0.3, 0.5, 0.8],
-  [0.01, 0.05, 0.1, 0.3, 0.5],
-  [0.01, 0.03, 0.05, 0.08, 0.1],
-  [0.0, 0.01, 0.03, 0.05, 0.08],
+  [0.01, 0.03, 0.05, 0.08, 0.10],
+  [0.01, 0.05, 0.10, 0.30, 0.50],
+  [0.05, 0.10, 0.30, 0.50, 0.80],
+  [0.10, 0.30, 0.50, 0.90, 1.00],
+  [0.05, 0.10, 0.30, 0.50, 0.80],
+  [0.01, 0.05, 0.10, 0.30, 0.50],
+  [0.01, 0.03, 0.05, 0.08, 0.10],
+  [0.00, 0.01, 0.03, 0.05, 0.08],
+] as any).flat()
+let PREDICTION_MAP_SLOW_LEFT = ([
+  [0.10, 0.50, 0.10, 0.05, 0.05],
+  [0.40, 0.80, 0.40, 0.10, 0.10],
+  [0.60, 1.00, 0.60, 0.20, 0.20],
+  [0.40, 0.80, 0.40, 0.10, 0.10],
+  [0.20, 0.50, 0.20, 0.05, 0.05],
+  [0.10, 0.20, 0.10, 0.03, 0.03],
+  [0.05, 0.10, 0.05, 0.01, 0.01],
+  [0.05, 0.10, 0.05, 0.01, 0.01],
+] as any).flat()
+let PREDICTION_MAP_SLOW_RIGHT = ([
+  [0.05, 0.05, 0.10, 0.50, 0.10],
+  [0.10, 0.10, 0.40, 0.80, 0.40],
+  [0.20, 0.20, 0.60, 1.00, 0.60],
+  [0.10, 0.10, 0.40, 0.80, 0.40],
+  [0.05, 0.05, 0.20, 0.50, 0.20],
+  [0.03, 0.03, 0.10, 0.20, 0.10],
+  [0.01, 0.01, 0.05, 0.10, 0.05],
+  [0.01, 0.01, 0.05, 0.10, 0.05],
+] as any).flat()
+let PREDICTION_MAP_BRAKE = ([
+  [0.01, 0.05, 0.10, 0.05, 0.01],
+  [0.01, 0.05, 0.10, 0.05, 0.01],
+  [0.03, 0.10, 0.20, 0.10, 0.03],
+  [0.05, 0.10, 0.50, 0.10, 0.05],
+  [0.05, 0.20, 0.50, 0.20, 0.05],
+  [0.10, 0.40, 0.80, 0.40, 0.10],
+  [0.10, 0.40, 0.80, 0.40, 0.10],
+  [0.20, 0.60, 1.00, 0.60, 0.20],
 ] as any).flat()
 
 let PREDICTION_MOCK_DATA = {
   'Straight': PREDICTION_MAP_STRAIGHT,
   'Left': PREDICTION_MAP_LEFT,
-  'Right': PREDICTION_MAP_RIGHT
+  'Right': PREDICTION_MAP_RIGHT,
+  'Slow Left': PREDICTION_MAP_SLOW_LEFT,
+  'Slow Right': PREDICTION_MAP_SLOW_RIGHT,
+  'Slam Brakes': PREDICTION_MAP_BRAKE,
 }
+
 
 // =============================================
 // =============================================
@@ -300,6 +334,13 @@ class Sample {
   }
 }
 
+let SAMPLES = Object.keys(PREDICTION_MOCK_DATA)
+  .map(name => new Sample(name, generateMockPredictionLabels(name)))
+  .reduce((map, sample) => {
+    map[sample.name] = sample
+    return map
+  }, {})
+
 // For a given run, stores all of the predictions that took place.
 class PredictionsForRun {
   sample: Sample
@@ -444,13 +485,8 @@ class DataCollector {
 
   // Returns a list of all use-annotated samples
   async getAllSamples(): Promise<Sample[]> {
-    // TODO -> have samples stored and return them with ththis query
-    let samples = ["Straight", "Left", "Right"].map(sample => {
-      return new Sample(sample, generateMockPredictionLabels(sample))
-    })
+    let samples = Object.keys(SAMPLES).map(name => SAMPLES[name])
     return Promise.resolve(samples)
-    // return fetch('data/all_samples')
-    //     .then(function(response) { return response.json(); })
   }
 
   // Returns the entire set of predictions for a sample within a run.
@@ -1620,7 +1656,7 @@ class SpectrogramsArea extends SimpleG {
   scale: SpectrogramsScale
   private _spectG: any
 
-  constructor(g: any, width: number = 600, height: number = 150) {
+  constructor(g: any, width: number = 600, height: number = 300) {
     super(g.node() as any, width, height)
     this._spectG = g.append('g')
 
