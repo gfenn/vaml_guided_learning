@@ -25,6 +25,10 @@ svg text::selection {
     background: none;
 }
 
+.runLine {
+  stroke: red;
+}
+
 .event .eventFlag {
   fill: #2f2f2f;
 }

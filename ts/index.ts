@@ -1279,6 +1279,7 @@ class RewardsGraph extends ShapeRegion {
         runData.applyEwma(EWMA_BETA_LINES)
         if (this._runLines.length == 0) {
           let line = this.addLine(runData.points, 'red')
+          line.g.attr('class', 'runLine')
           this._runLines.push(line)
         }
         else {
@@ -1293,6 +1294,13 @@ class RewardsGraph extends ShapeRegion {
           REWARDS_GRAPH.deselectEvents()
         }
       })
+  }
+
+  runLine() {
+    if (this._runLines.length > 0) {
+      return this._runLines[this._runLines.length - 1]
+    }
+    return undefined
   }
 
   lastStep() {
@@ -1723,30 +1731,6 @@ class HoverText {
 }
 
 
-function _build_pred_matrix_scale_defs() {
-  let gradient = d3.select('#defs')
-      .append('linearGradient')
-      .attr('id', 'predMatrixGradient')
-      .attr('x1', '0%')
-      .attr('y1', '100%')
-      .attr('x2', '0%')
-      .attr('y2', '0%')
-      .attr('spreadMethod', 'pad')
-
-    linspace(0, 100, 10)
-      .map(d => Math.round(d))
-      .forEach(function(pct, idx) {
-        let color = d3.interpolateBlues(pct / 100.0)
-        gradient.append('stop')
-          .attr('offset', pct + '%')
-          .attr('stop-color', color)
-          .attr('stop-opacity', 1);
-      });
-}
-_build_pred_matrix_scale_defs()
-
-
-
 class PredictionMatrixScale {
 
   private _bar: any
@@ -1850,13 +1834,19 @@ class PredictionMatrix extends ShapeRegion {
       // Square
       let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
       box.g.attr('stroke', 'clear')
-        .on('mouseover', (d: any) => {
-          if (d != null) {
-            this.hoverDisplay(d[0], d[1])
-          }
-        })
       if (!embedded) {
-        box.g.on('mouseout', (v: any) => { this.stopHover() })
+        box.g
+          .on('mouseover', (d: any) => {
+            if (d != null) {
+              this.hoverDisplay(d[0], d[1])
+            }
+            updateRunLineGradient(idx)
+            REWARDS_GRAPH.runLine().g.style('stroke', 'url(#runLineGradient)')
+          })
+          .on('mouseout', (v: any) => {
+            this.stopHover()
+            REWARDS_GRAPH.runLine().g.style('stroke', '')
+          })
           .on('mousedown', () => {
             this._monoColors = false
             this._updateColors()
@@ -1928,6 +1918,73 @@ class PredictionMatrix extends ShapeRegion {
 
 }
 
+
+// =============================================
+// =============================================
+// =============================================
+// =========== GRADIENTS ===========================
+// =============================================
+// =============================================
+// =============================================
+
+
+function _build_pred_matrix_scale_defs() {
+  let gradient = d3.select('#defs')
+      .append('linearGradient')
+      .attr('id', 'predMatrixGradient')
+      .attr('x1', '0%')
+      .attr('y1', '100%')
+      .attr('x2', '0%')
+      .attr('y2', '0%')
+      .attr('spreadMethod', 'pad')
+
+    linspace(0, 100, 10)
+      .map(d => Math.round(d))
+      .forEach(function(pct, idx) {
+        let color = d3.interpolateBlues(pct / 100.0)
+        gradient.append('stop')
+          .attr('offset', pct + '%')
+          .attr('stop-color', color)
+          .attr('stop-opacity', 1);
+      });
+}
+_build_pred_matrix_scale_defs()
+
+
+
+function updateRunLineGradient(actionIndex: number) {
+  // Remove all children
+  d3.select('#runLineGradient').selectAll('stop').remove()
+
+  // Determine all of the predictions and the prediction range
+  let sampleData = STORED_DATA.map[SELECTED_SAMPLE]
+  let predsForRun = sampleData.runs[sampleData.runs.length - 1]
+  let predictionValues = predsForRun.predictions.map(preds => preds.data[actionIndex])
+  let predMax = predictionValues.reduce(reduceMax, undefined)
+  let predMin = predictionValues.reduce(reduceMin, undefined)
+
+  predictionValues.forEach((point, stepIndex) => {
+    let pct = stepIndex / predictionValues.length * 100
+    let color = d3.interpolateBlues((point - predMin) / predMax)
+    RUNLINE_GRADIENT.append('stop')
+      .attr('offset', pct + '%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 1);
+  })
+}
+
+var RUNLINE_GRADIENT
+function _build_run_line_gradient() {
+  RUNLINE_GRADIENT = d3.select('#defs')
+    .append('linearGradient')
+    .attr('id', 'runLineGradient')
+    .attr('x1', '0%')
+    .attr('x2', '100%')
+    .attr('y1', '0%')
+    .attr('y2', '0%')
+    .attr('spreadMethod', 'pad')
+}
+_build_run_line_gradient()
 
 // =============================================
 // =============================================
