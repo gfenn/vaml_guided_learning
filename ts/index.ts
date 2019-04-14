@@ -254,9 +254,9 @@ class Prediction {
     // TODO - when no longer using mock data, determine correctness score
     // let score = data.map((probability, index) => {
     //   // Label is 0 (wrong = 0 points), 1 (neutral = 0.5 points), or 2 (good = 1 point)
-    //   return probability * (labels[index] / 3)
+    //   return probability * (labels[index] / 2)
     // })
-    // this.correctness = score.reduce((p, c) => p + c, 0) / score.length
+    // correctness = score.reduce((p, c) => p + c, 0)
     return new Prediction(data, dataNormalized, correctness)
   }
 
@@ -1079,8 +1079,8 @@ class RewardsGraph extends ShapeRegion {
       .attr('width', '0')
       .attr('height', this.size.height)
       .attr('visibility', 'hidden')
-    this._selectionG_1 = this.buildSelectionLine()
-    this._selectionG_2 = this.buildSelectionLine()
+    this._selectionG_1 = this.buildSelectionLine(true)
+    this._selectionG_2 = this.buildSelectionLine(false)
     this._selectionG_2.attr('visibility', 'hidden')
 
     this._eventsG = this._backgroundG
@@ -1120,7 +1120,13 @@ class RewardsGraph extends ShapeRegion {
     this._xAxis.top = true
   }
 
-  private buildSelectionLine(): any {
+  private selectionBarY(bar: any, override: boolean = undefined): number {
+    if ((bar == this._selectionG_1 && override !== false) || override === true)
+      return this.size.height - 4
+    return 12
+  }
+
+  private buildSelectionLine(bottom: boolean): any {
     // Create g
     let selectionG = this._backgroundG
       .append('g')
@@ -1133,10 +1139,11 @@ class RewardsGraph extends ShapeRegion {
       .attr('y2', this.size.height)
 
     // Add text
+    let y = this.selectionBarY(undefined, bottom)
     selectionG
       .append('text')
       .attr('class', 'selectionText')
-      .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
+      .attr('transform', 'translate(2, ' + y + ')')
       .text('Step: 0')
 
     return selectionG
@@ -1209,8 +1216,9 @@ class RewardsGraph extends ShapeRegion {
       transformX = 3
       anchor = 'begin'
     }
+    let y = this.selectionBarY(selectionG)
     selectionG.select('text')
-      .attr('transform', 'translate(' + transformX + ', ' + (this.size.height - 4) + ')')
+      .attr('transform', 'translate(' + transformX + ', ' + y + ')')
       .attr('text-anchor', anchor)
       .text('Step: ' + formatStep(step))
   }
