@@ -1849,17 +1849,23 @@ class PredictionMatrix extends ShapeRegion {
   private _hoverText: HoverText
   private _monoColors: boolean = true
 
-  constructor(g: any, size: Size = new Size(100, 160), embedded: boolean = false) {
+  constructor(g: any, size: Size = new Size(200, 200), embedded: boolean = false) {
     super(g)
     this.size = size
 
     // Add header
     if (!embedded) {
+      this.g.append('text')
+        .attr('x', this.size.width / 2)
+        .attr('y', -28)
+        .attr('font-size', '20')
+        .attr("text-anchor", "middle")
+        .text('Sample Action Matrix')
       this._header = this.g.append('text')
         .attr('x', this.size.width / 2)
         .attr('y', -8)
         .attr("text-anchor", "middle")
-        .text('Sample: None Selected')
+        .text('No Sample Selected')
     }
 
     // Add a background
@@ -1907,7 +1913,12 @@ class PredictionMatrix extends ShapeRegion {
       let yVal = yDomain(Math.floor(idx / STEER_ACTIONS))
 
       // Square
-      let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
+      let box = this.addBox(new Rectangle(
+        Math.floor(xVal),
+        Math.ceil(yVal + yBandwidth),
+        Math.ceil(xVal + xBandwidth),
+        Math.floor(yVal)
+      ))
       box.g.attr('stroke', 'clear')
       if (!embedded) {
         box.g
@@ -1941,7 +1952,7 @@ class PredictionMatrix extends ShapeRegion {
     this.sample = sample
     this._updateColors()
     if (this._header) {
-      this._header.text('Sample: ' + sample.name)
+      this._header.text(sample.name)
     }
     if (this.scale) {
       this.scale.scale(
