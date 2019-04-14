@@ -1959,13 +1959,10 @@ function updateRunLineGradient(actionIndex: number) {
   // Determine all of the predictions and the prediction range
   let sampleData = STORED_DATA.map[SELECTED_SAMPLE]
   let predsForRun = sampleData.runs[sampleData.runs.length - 1]
-  let predictionValues = predsForRun.predictions.map(preds => preds.data[actionIndex])
-  let predMax = predictionValues.reduce(reduceMax, undefined)
-  let predMin = predictionValues.reduce(reduceMin, undefined)
-
+  let predictionValues = predsForRun.predictions.map(preds => preds.dataNormalized[actionIndex])
   predictionValues.forEach((point, stepIndex) => {
     let pct = stepIndex / predictionValues.length * 100
-    let color = d3.interpolateBlues((point - predMin) / predMax)
+    let color = d3.interpolateBlues(point)
     RUNLINE_GRADIENT.append('stop')
       .attr('offset', pct + '%')
       .attr('stop-color', color)
