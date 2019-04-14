@@ -73,6 +73,11 @@ svg text::selection {
   stroke-width: 6;
 }
 
+.spectrogramScaleText {
+  font-size: 10px;
+  fill: #797979;
+}
+
 .predMatrixScaleText {
   font-size: 10px;
   fill: #797979;

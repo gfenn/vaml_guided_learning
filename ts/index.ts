@@ -1617,9 +1617,16 @@ class SpectrogramsArea extends SimpleG {
 
   samples: Sample[] = []
   spectrogramsMap: {[key: string]: Spectrogram} = {}
+  scale: SpectrogramsScale
+  private _spectG: any
 
-  constructor() {
-    super(d3.select('#spectrograms').node() as any, 600, 150)
+  constructor(g: any, width: number = 600, height: number = 150) {
+    super(g.node() as any, width, height)
+    this._spectG = g.append('g')
+
+    let scaleG = g.append('g')
+      .attr('transform', 'translate(0, ' + (height + 10) + ')')
+    this.scale = new SpectrogramsScale(scaleG, width)
   }
 
   private rebuild(samples: Sample[]) {
@@ -1631,11 +1638,11 @@ class SpectrogramsArea extends SimpleG {
       .paddingInner(0.1)
 
     // Remove existing spectrograms
-    this.gSelection.selectAll('g').remove()
+    this._spectG.selectAll('g').remove()
     this.spectrogramsMap = {}
 
     // Build the new ones
-    this.gSelection
+    this._spectG
       .selectAll('g')
       .data(samples)
       .enter()
@@ -1677,6 +1684,38 @@ class SpectrogramsArea extends SimpleG {
 
 }
 
+class SpectrogramsScale {
+
+  private _bar: any
+  private _low: any
+  private _high: any
+
+  constructor(g: any, width: number) {
+    this._bar = g.append('rect')
+      .attr('width', width)
+      .attr('height', '10')
+      .style('fill', 'url(#spectrogramGradient)')
+
+    this._low = g.append('text')
+      .attr('x', '0')
+      .attr('y', '20')
+      .attr('text-anchor', 'start')
+      .attr('class', 'spectrogramScaleText')
+      .text('0.0')
+
+    this._high = g.append('text')
+      .attr('x', width)
+      .attr('y', '20')
+      .attr('text-anchor', 'end')
+      .attr('class', 'spectrogramScaleText')
+      .text('1.0')
+  }
+
+  scale(low: number, high: number) {
+    this._high.text(high.toPrecision(2))
+    this._low.text(low.toPrecision(2))
+  }
+}
 
 
 // =======================================================
@@ -1951,6 +1990,28 @@ function _build_pred_matrix_scale_defs() {
 _build_pred_matrix_scale_defs()
 
 
+function _build_spectrogram_scale_defs() {
+  let gradient = d3.select('#defs')
+      .append('linearGradient')
+      .attr('id', 'spectrogramGradient')
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '100%')
+      .attr('y2', '0%')
+      .attr('spreadMethod', 'pad')
+
+    linspace(0, 100, 10)
+      .map(d => Math.round(d))
+      .forEach(function(pct, idx) {
+        let color = d3.interpolateRdYlGn(pct / 100.0)
+        gradient.append('stop')
+          .attr('offset', pct + '%')
+          .attr('stop-color', color)
+          .attr('stop-opacity', 1);
+      });
+}
+_build_spectrogram_scale_defs()
+
 
 function updateRunLineGradient(actionIndex: number) {
   // Remove all children
@@ -2003,7 +2064,7 @@ let UPDATE_ON: boolean = false
 
 // Build the components first
 let REWARDS_GRAPH = new RewardsGraph()
-let SPECTROGRAMS = new SpectrogramsArea()
+let SPECTROGRAMS = new SpectrogramsArea(d3.select('#spectrograms'))
 let MAIN_PREDICTIONS = new PredictionMatrix(d3.select('#predictions'))
 let STORED_DATA: SampleDataRepo
 let EVENTS: EpisodeEvent[] = []
