@@ -64,14 +64,37 @@ let PREDICTION_MOCK_DATA = {
 // =============================================
 // =============================================
 
+function reduceMax(prev: number, curr: number): number {
+  if (prev === undefined) return curr
+  return Math.max(prev, curr)
+}
+function reduceMin(prev: number, curr: number): number {
+  if (prev === undefined) return curr
+  return Math.min(prev, curr)
+}
+
+function linspace(start, end, n) {
+  var out = [];
+  var delta = (end - start) / (n - 1);
+
+  var i = 0;
+  while(i < (n - 1)) {
+    out.push(start + (i * delta));
+    i++;
+  }
+
+  out.push(end);
+  return out;
+}
+
 // Convert the array into values between [0, 1]
 function normalizeValues(values: number[]) {
   // Adjust min so lowest value is 0
-  let minVal = values.reduce((min, val) => val < min ? val : min, values[0])
+  let minVal = values.reduce(reduceMin, undefined)
   values = values.map(val => val - minVal)
 
   // Divice each by max value so range is 0-1
-  let maxVal = values.reduce((max, val) => val > max ? val : max, values[0])
+  let maxVal = values.reduce(reduceMax, undefined)
   values = values.map(val => val / maxVal)
   return values
 }
@@ -1546,7 +1569,7 @@ class Spectrogram extends SimpleG {
     this.checkRebuild(rows.length)
     let maxLength = rows
       .map(r => r.predictions.length)
-      .reduce((prev, curr) => curr > prev ? curr : prev, rows[0].predictions.length)
+      .reduce(reduceMax, undefined)
 
     this.xDomain.domain([0, maxLength])
 
@@ -1700,12 +1723,69 @@ class HoverText {
 }
 
 
+function _build_pred_matrix_scale_defs() {
+  let gradient = d3.select('#defs')
+      .append('linearGradient')
+      .attr('id', 'predMatrixGradient')
+      .attr('x1', '0%')
+      .attr('y1', '100%')
+      .attr('x2', '0%')
+      .attr('y2', '0%')
+      .attr('spreadMethod', 'pad')
+
+    linspace(0, 100, 10)
+      .map(d => Math.round(d))
+      .forEach(function(pct, idx) {
+        let color = d3.interpolateBlues(pct / 100.0)
+        gradient.append('stop')
+          .attr('offset', pct + '%')
+          .attr('stop-color', color)
+          .attr('stop-opacity', 1);
+      });
+}
+_build_pred_matrix_scale_defs()
+
+
+
+class PredictionMatrixScale {
+
+  private _bar: any
+  private _high: any
+  private _low: any
+
+  constructor(g: any, height: number) {
+    this._bar = g.append('rect')
+      .attr('width', '10')
+      .attr('height', height)
+      .style('fill', 'url(#predMatrixGradient)')
+
+    this._high = g.append('text')
+      .attr('x', '15')
+      .attr('y', '9')
+      .attr('class', 'predMatrixScaleText')
+      .text('1.0')
+
+    this._low = g.append('text')
+      .attr('x', '15')
+      .attr('y', height)
+      .attr('class', 'predMatrixScaleText')
+      .text('0.0')
+  }
+
+  scale(low: number, high: number) {
+    this._high.text(high.toPrecision(2))
+    this._low.text(low.toPrecision(2))
+  }
+}
+
+
 // Contains all information for the prediction matrix.
 class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
   prediction: Prediction
   sample: Sample
+  scale: PredictionMatrixScale
   private _header: any
   private _hoverText: HoverText
   private _monoColors: boolean = true
@@ -1732,8 +1812,11 @@ class PredictionMatrix extends ShapeRegion {
 
     if (!embedded) {
       // Build the hover component and place it to the right of the graph
-      let hoverG = this.g.append('g').attr('transform', 'translate(' + (this.size.width + 10) + ',' + (this.size.height / 2) + ')')
+      let hoverG = this.g.append('g').attr('transform', 'translate(' + (this.size.width + 20) + ',' + (this.size.height / 2) + ')')
       this._hoverText = new HoverText(hoverG)
+
+      let scaleG = this.g.append('g').attr('transform', 'translate(' + (this.size.width + 5) + ',0)')
+      this.scale = new PredictionMatrixScale(scaleG, this.size.height)
     }
 
     // Remove paddin gand clear axes
@@ -1794,6 +1877,12 @@ class PredictionMatrix extends ShapeRegion {
     this._updateColors()
     if (this._header) {
       this._header.text('Sample: ' + sample.name)
+    }
+    if (this.scale) {
+      this.scale.scale(
+        prediction.data.reduce(reduceMin, undefined),
+        prediction.data.reduce(reduceMax, undefined)
+      )
     }
   }
 

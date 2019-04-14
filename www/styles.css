@@ -69,6 +69,11 @@ svg text::selection {
   stroke-width: 6;
 }
 
+.predMatrixScaleText {
+  font-size: 10px;
+  fill: #797979;
+}
+
 #event-panel {
   position: absolute;
   left: 740px;
