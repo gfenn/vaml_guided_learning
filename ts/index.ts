@@ -19,42 +19,76 @@ let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
 
 
 // Mock Data
-let PREDICTION_MAP_STRAIGHT = [
-  [0.01, 0.05, 0.1, 0.05, 0.01],
-  [0.05, 0.1, 0.5, 0.1, 0.05],
-  [0.1, 0.4, 0.8, 0.4, 0.1],
-  [0.2, 0.6, 1.0, 0.6, 0.2],
-  [0.1, 0.4, 0.8, 0.4, 0.1],
-  [0.05, 0.2, 0.5, 0.2, 0.05],
-  [0.03, 0.1, 0.2, 0.1, 0.03],
-  [0.01, 0.05, 0.1, 0.05, 0.01],
-].flat()
-let PREDICTION_MAP_LEFT = [
-  [0.08, 0.05, 0.03, 0.01, 0.0],
-  [0.1, 0.08, 0.05, 0.03, 0.01],
-  [0.5, 0.3, 0.1, 0.05, 0.01],
-  [0.8, 0.5, 0.3, 0.1, 0.05],
-  [1.0, 0.9, 0.5, 0.3, 0.1],
-  [0.8, 0.5, 0.3, 0.1, 0.05],
-  [0.5, 0.3, 0.1, 0.05, 0.01],
-  [0.1, 0.08, 0.05, 0.03, 0.01],
-].flat()
-let PREDICTION_MAP_RIGHT = [
-  [0.01, 0.03, 0.05, 0.08, 0.1],
-  [0.01, 0.05, 0.1, 0.3, 0.5],
-  [0.05, 0.1, 0.3, 0.5, 0.8],
-  [0.1, 0.3, 0.5, 0.9, 1.0],
-  [0.05, 0.1, 0.3, 0.5, 0.8],
-  [0.01, 0.05, 0.1, 0.3, 0.5],
-  [0.01, 0.03, 0.05, 0.08, 0.1],
-  [0.0, 0.01, 0.03, 0.05, 0.08],
-].flat()
+let PREDICTION_MAP_STRAIGHT = ([
+  [0.01, 0.05, 0.10, 0.05, 0.01],
+  [0.05, 0.10, 0.50, 0.10, 0.05],
+  [0.10, 0.40, 0.80, 0.40, 0.10],
+  [0.20, 0.60, 1.00, 0.60, 0.20],
+  [0.10, 0.40, 0.80, 0.40, 0.10],
+  [0.05, 0.20, 0.50, 0.20, 0.05],
+  [0.03, 0.10, 0.20, 0.10, 0.03],
+  [0.01, 0.05, 0.10, 0.05, 0.01],
+] as any).flat()
+let PREDICTION_MAP_LEFT = ([
+  [0.08, 0.05, 0.03, 0.01, 0.00],
+  [0.10, 0.08, 0.05, 0.03, 0.01],
+  [0.50, 0.30, 0.10, 0.05, 0.01],
+  [0.80, 0.50, 0.30, 0.10, 0.05],
+  [1.00, 0.90, 0.50, 0.30, 0.10],
+  [0.80, 0.50, 0.30, 0.10, 0.05],
+  [0.50, 0.30, 0.10, 0.05, 0.01],
+  [0.10, 0.08, 0.05, 0.03, 0.01],
+] as any).flat()
+let PREDICTION_MAP_RIGHT = ([
+  [0.01, 0.03, 0.05, 0.08, 0.10],
+  [0.01, 0.05, 0.10, 0.30, 0.50],
+  [0.05, 0.10, 0.30, 0.50, 0.80],
+  [0.10, 0.30, 0.50, 0.90, 1.00],
+  [0.05, 0.10, 0.30, 0.50, 0.80],
+  [0.01, 0.05, 0.10, 0.30, 0.50],
+  [0.01, 0.03, 0.05, 0.08, 0.10],
+  [0.00, 0.01, 0.03, 0.05, 0.08],
+] as any).flat()
+let PREDICTION_MAP_SLOW_LEFT = ([
+  [0.10, 0.50, 0.10, 0.05, 0.05],
+  [0.40, 0.80, 0.40, 0.10, 0.10],
+  [0.60, 1.00, 0.60, 0.20, 0.20],
+  [0.40, 0.80, 0.40, 0.10, 0.10],
+  [0.20, 0.50, 0.20, 0.05, 0.05],
+  [0.10, 0.20, 0.10, 0.03, 0.03],
+  [0.05, 0.10, 0.05, 0.01, 0.01],
+  [0.05, 0.10, 0.05, 0.01, 0.01],
+] as any).flat()
+let PREDICTION_MAP_SLOW_RIGHT = ([
+  [0.05, 0.05, 0.10, 0.50, 0.10],
+  [0.10, 0.10, 0.40, 0.80, 0.40],
+  [0.20, 0.20, 0.60, 1.00, 0.60],
+  [0.10, 0.10, 0.40, 0.80, 0.40],
+  [0.05, 0.05, 0.20, 0.50, 0.20],
+  [0.03, 0.03, 0.10, 0.20, 0.10],
+  [0.01, 0.01, 0.05, 0.10, 0.05],
+  [0.01, 0.01, 0.05, 0.10, 0.05],
+] as any).flat()
+let PREDICTION_MAP_BRAKE = ([
+  [0.01, 0.05, 0.10, 0.05, 0.01],
+  [0.01, 0.05, 0.10, 0.05, 0.01],
+  [0.03, 0.10, 0.20, 0.10, 0.03],
+  [0.05, 0.10, 0.50, 0.10, 0.05],
+  [0.05, 0.20, 0.50, 0.20, 0.05],
+  [0.10, 0.40, 0.80, 0.40, 0.10],
+  [0.10, 0.40, 0.80, 0.40, 0.10],
+  [0.20, 0.60, 1.00, 0.60, 0.20],
+] as any).flat()
 
 let PREDICTION_MOCK_DATA = {
   'Straight': PREDICTION_MAP_STRAIGHT,
   'Left': PREDICTION_MAP_LEFT,
-  'Right': PREDICTION_MAP_RIGHT
+  'Right': PREDICTION_MAP_RIGHT,
+  'Slow Left': PREDICTION_MAP_SLOW_LEFT,
+  'Slow Right': PREDICTION_MAP_SLOW_RIGHT,
+  'Slam Brakes': PREDICTION_MAP_BRAKE,
 }
+
 
 // =============================================
 // =============================================
@@ -64,14 +98,37 @@ let PREDICTION_MOCK_DATA = {
 // =============================================
 // =============================================
 
+function reduceMax(prev: number, curr: number): number {
+  if (prev === undefined) return curr
+  return Math.max(prev, curr)
+}
+function reduceMin(prev: number, curr: number): number {
+  if (prev === undefined) return curr
+  return Math.min(prev, curr)
+}
+
+function linspace(start, end, n) {
+  var out = [];
+  var delta = (end - start) / (n - 1);
+
+  var i = 0;
+  while(i < (n - 1)) {
+    out.push(start + (i * delta));
+    i++;
+  }
+
+  out.push(end);
+  return out;
+}
+
 // Convert the array into values between [0, 1]
 function normalizeValues(values: number[]) {
   // Adjust min so lowest value is 0
-  let minVal = values.reduce((min, val) => val < min ? val : min, values[0])
+  let minVal = values.reduce(reduceMin, undefined)
   values = values.map(val => val - minVal)
 
   // Divice each by max value so range is 0-1
-  let maxVal = values.reduce((max, val) => val > max ? val : max, values[0])
+  let maxVal = values.reduce(reduceMax, undefined)
   values = values.map(val => val / maxVal)
   return values
 }
@@ -131,6 +188,28 @@ function formatStep(step: number): string {
     return roundedM + 'M'
   }
   return (roundedM / 1000) + 'G'
+}
+
+function determineCurrentPrediction(runPredictions: PredictionsForRun): Prediction {
+  let step = Math.floor(SELECTED_STEPS[0] / DATA_COMPRESSION_PREDICTIONS)
+  return runPredictions.predictionForStep(step)
+}
+
+function determineAveragePrediction(runPredictions: PredictionsForRun, sample: Sample): Prediction {
+  // Prediction range
+  let predictions = runPredictions.predictionsForRange(
+    SELECTED_STEPS.map(it =>
+      Math.floor(it / DATA_COMPRESSION_PREDICTIONS))
+  )
+  if (predictions.length > 0) {
+    let avgPrediction = new Prediction(
+      normalizeNumberArrays(predictions.map(it => it.data)),
+      normalizeNumberArrays(predictions.map(it => it.dataNormalized)),
+      predictions.reduce((prev, curr) => prev + curr.correctness, 0) / predictions.length
+    )
+    return avgPrediction
+  }
+  return undefined
 }
 
 // Interface for a generic data field - field is an identifier for
@@ -232,9 +311,9 @@ class Prediction {
     // TODO - when no longer using mock data, determine correctness score
     // let score = data.map((probability, index) => {
     //   // Label is 0 (wrong = 0 points), 1 (neutral = 0.5 points), or 2 (good = 1 point)
-    //   return probability * (labels[index] / 3)
+    //   return probability * (labels[index] / 2)
     // })
-    // this.correctness = score.reduce((p, c) => p + c, 0) / score.length
+    // correctness = score.reduce((p, c) => p + c, 0)
     return new Prediction(data, dataNormalized, correctness)
   }
 
@@ -254,6 +333,13 @@ class Sample {
     this.labels = labels
   }
 }
+
+let SAMPLES = Object.keys(PREDICTION_MOCK_DATA)
+  .map(name => new Sample(name, generateMockPredictionLabels(name)))
+  .reduce((map, sample) => {
+    map[sample.name] = sample
+    return map
+  }, {})
 
 // For a given run, stores all of the predictions that took place.
 class PredictionsForRun {
@@ -399,13 +485,8 @@ class DataCollector {
 
   // Returns a list of all use-annotated samples
   async getAllSamples(): Promise<Sample[]> {
-    // TODO -> have samples stored and return them with ththis query
-    let samples = ["Straight", "Left", "Right"].map(sample => {
-      return new Sample(sample, generateMockPredictionLabels(sample))
-    })
+    let samples = Object.keys(SAMPLES).map(name => SAMPLES[name])
     return Promise.resolve(samples)
-    // return fetch('data/all_samples')
-    //     .then(function(response) { return response.json(); })
   }
 
   // Returns the entire set of predictions for a sample within a run.
@@ -1057,8 +1138,8 @@ class RewardsGraph extends ShapeRegion {
       .attr('width', '0')
       .attr('height', this.size.height)
       .attr('visibility', 'hidden')
-    this._selectionG_1 = this.buildSelectionLine()
-    this._selectionG_2 = this.buildSelectionLine()
+    this._selectionG_1 = this.buildSelectionLine(true)
+    this._selectionG_2 = this.buildSelectionLine(false)
     this._selectionG_2.attr('visibility', 'hidden')
 
     this._eventsG = this._backgroundG
@@ -1079,6 +1160,15 @@ class RewardsGraph extends ShapeRegion {
           setSelectedStep(Math.round(step))
         REWARDS_GRAPH.deselectEvents()
       })
+      .call(d3.drag().on('start', function() {
+        d3.event.on('drag', function(d) {
+          let coords = d3.mouse(this)
+          let step = self._xAxis.domain.invert(coords[0])
+          if (step >= 0 && step <= 3000000) {
+            setSelectionRange(SELECTED_STEPS[0], step)
+          }
+        })
+      }))
 
 
     // Add a polygon and hide it
@@ -1089,7 +1179,13 @@ class RewardsGraph extends ShapeRegion {
     this._xAxis.top = true
   }
 
-  private buildSelectionLine(): any {
+  private selectionBarY(bar: any, override: boolean = undefined): number {
+    if ((bar == this._selectionG_1 && override !== false) || override === true)
+      return this.size.height - 4
+    return 12
+  }
+
+  private buildSelectionLine(bottom: boolean): any {
     // Create g
     let selectionG = this._backgroundG
       .append('g')
@@ -1102,10 +1198,11 @@ class RewardsGraph extends ShapeRegion {
       .attr('y2', this.size.height)
 
     // Add text
+    let y = this.selectionBarY(undefined, bottom)
     selectionG
       .append('text')
       .attr('class', 'selectionText')
-      .attr('transform', 'translate(2, ' + (this.size.height - 4) + ')')
+      .attr('transform', 'translate(2, ' + y + ')')
       .text('Step: 0')
 
     return selectionG
@@ -1178,8 +1275,9 @@ class RewardsGraph extends ShapeRegion {
       transformX = 3
       anchor = 'begin'
     }
+    let y = this.selectionBarY(selectionG)
     selectionG.select('text')
-      .attr('transform', 'translate(' + transformX + ', ' + (this.size.height - 4) + ')')
+      .attr('transform', 'translate(' + transformX + ', ' + y + ')')
       .attr('text-anchor', anchor)
       .text('Step: ' + formatStep(step))
   }
@@ -1217,6 +1315,7 @@ class RewardsGraph extends ShapeRegion {
         runData.applyEwma(EWMA_BETA_LINES)
         if (this._runLines.length == 0) {
           let line = this.addLine(runData.points, 'red')
+          line.g.attr('class', 'runLine')
           this._runLines.push(line)
         }
         else {
@@ -1231,6 +1330,13 @@ class RewardsGraph extends ShapeRegion {
           REWARDS_GRAPH.deselectEvents()
         }
       })
+  }
+
+  runLine() {
+    if (this._runLines.length > 0) {
+      return this._runLines[this._runLines.length - 1]
+    }
+    return undefined
   }
 
   lastStep() {
@@ -1418,6 +1524,9 @@ class Spectrogram extends SimpleG {
   rows: SpectrogramRow[] = []
   background: any
   xDomain: any
+  predictions: PredictionMatrix
+
+  private _data: PredictionsForRun[]
 
   constructor(g: SVGGElement, width: number, height: number, sample: Sample) {
     super(g, width, height)
@@ -1456,6 +1565,13 @@ class Spectrogram extends SimpleG {
       .attr('width', this.width)
       .attr('height', this.height)
       .attr('class', 'spectrogramBackground')
+
+    // Prediction matrix
+    let predictionG = this.gSelection
+      .append('g')
+      .attr('class', 'predictionMatrix')
+      .attr('transform', 'translate(' + (this.width + 10) + ', 0)')
+    this.predictions = new PredictionMatrix(predictionG, new Size(height, height), true)
   }
 
   select() {
@@ -1497,7 +1613,7 @@ class Spectrogram extends SimpleG {
     this.checkRebuild(rows.length)
     let maxLength = rows
       .map(r => r.predictions.length)
-      .reduce((prev, curr) => curr > prev ? curr : prev, rows[0].predictions.length)
+      .reduce(reduceMax, undefined)
 
     this.xDomain.domain([0, maxLength])
 
@@ -1505,6 +1621,25 @@ class Spectrogram extends SimpleG {
     rows.forEach((row, index) => {
       this.rows[index].data(row.predictions)
     })
+    this._data = rows
+    this.updatePredictions()
+  }
+
+  updatePredictions() {
+    // Update the prediction matrix
+    if (this._data && this._data.length > 0) {
+      let currentRun = this._data[this._data.length - 1]
+      if (SELECTED_STEPS.length == 1) {
+        let prediction = determineCurrentPrediction(currentRun)
+        this.predictions.data(prediction, currentRun.sample)
+      }
+      else if (SELECTED_STEPS.length == 2) {
+        let prediction = determineAveragePrediction(currentRun, currentRun.sample)
+        if (prediction) {
+          this.predictions.data(prediction, currentRun.sample)
+        }
+      }
+    }
   }
 
   set text (text: string) {
@@ -1518,9 +1653,16 @@ class SpectrogramsArea extends SimpleG {
 
   samples: Sample[] = []
   spectrogramsMap: {[key: string]: Spectrogram} = {}
+  scale: SpectrogramsScale
+  private _spectG: any
 
-  constructor() {
-    super(d3.select('#spectrograms').node() as any, 600, 150)
+  constructor(g: any, width: number = 600, height: number = 300) {
+    super(g.node() as any, width, height)
+    this._spectG = g.append('g')
+
+    let scaleG = g.append('g')
+      .attr('transform', 'translate(0, ' + (height + 10) + ')')
+    this.scale = new SpectrogramsScale(scaleG, width)
   }
 
   private rebuild(samples: Sample[]) {
@@ -1532,11 +1674,11 @@ class SpectrogramsArea extends SimpleG {
       .paddingInner(0.1)
 
     // Remove existing spectrograms
-    this.gSelection.selectAll('g').remove()
+    this._spectG.selectAll('g').remove()
     this.spectrogramsMap = {}
 
     // Build the new ones
-    this.gSelection
+    this._spectG
       .selectAll('g')
       .data(samples)
       .enter()
@@ -1570,8 +1712,46 @@ class SpectrogramsArea extends SimpleG {
     })
   }
 
+  updatePredictions() {
+    for (let key in this.spectrogramsMap) {
+      this.spectrogramsMap[key].updatePredictions()
+    }
+  }
+
 }
 
+class SpectrogramsScale {
+
+  private _bar: any
+  private _low: any
+  private _high: any
+
+  constructor(g: any, width: number) {
+    this._bar = g.append('rect')
+      .attr('width', width)
+      .attr('height', '10')
+      .style('fill', 'url(#spectrogramGradient)')
+
+    this._low = g.append('text')
+      .attr('x', '0')
+      .attr('y', '20')
+      .attr('text-anchor', 'start')
+      .attr('class', 'spectrogramScaleText')
+      .text('0.0')
+
+    this._high = g.append('text')
+      .attr('x', width)
+      .attr('y', '20')
+      .attr('text-anchor', 'end')
+      .attr('class', 'spectrogramScaleText')
+      .text('1.0')
+  }
+
+  scale(low: number, high: number) {
+    this._high.text(high.toPrecision(2))
+    this._low.text(low.toPrecision(2))
+  }
+}
 
 
 // =======================================================
@@ -1626,26 +1806,67 @@ class HoverText {
 }
 
 
+class PredictionMatrixScale {
+
+  private _bar: any
+  private _high: any
+  private _low: any
+
+  constructor(g: any, height: number) {
+    this._bar = g.append('rect')
+      .attr('width', '10')
+      .attr('height', height)
+      .style('fill', 'url(#predMatrixGradient)')
+
+    this._high = g.append('text')
+      .attr('x', '15')
+      .attr('y', '9')
+      .attr('class', 'predMatrixScaleText')
+      .text('1.0')
+
+    this._low = g.append('text')
+      .attr('x', '15')
+      .attr('y', height)
+      .attr('class', 'predMatrixScaleText')
+      .text('0.0')
+  }
+
+  scale(low: number, high: number) {
+    this._high.text(high.toPrecision(2))
+    this._low.text(low.toPrecision(2))
+  }
+}
+
+
 // Contains all information for the prediction matrix.
 class PredictionMatrix extends ShapeRegion {
 
   squares: Box[] = []
   prediction: Prediction
   sample: Sample
+  scale: PredictionMatrixScale
   private _header: any
   private _hoverText: HoverText
   private _monoColors: boolean = true
 
-  constructor() {
-    super(d3.select('#predictions'))
-    this.size = new Size(100, 160)
+  constructor(g: any, size: Size = new Size(200, 200), embedded: boolean = false) {
+    super(g)
+    this.size = size
 
     // Add header
-    this._header = this.g.append('text')
-      .attr('x', this.size.width / 2)
-      .attr('y', -8)
-      .attr("text-anchor", "middle")
-      .text('Sample: None Selected')
+    if (!embedded) {
+      this.g.append('text')
+        .attr('x', this.size.width / 2)
+        .attr('y', -28)
+        .attr('font-size', '20')
+        .attr("text-anchor", "middle")
+        .text('Sample Action Matrix')
+      this._header = this.g.append('text')
+        .attr('x', this.size.width / 2)
+        .attr('y', -8)
+        .attr("text-anchor", "middle")
+        .text('No Sample Selected')
+    }
 
     // Add a background
     this.g.insert('rect', 'g')
@@ -1654,18 +1875,27 @@ class PredictionMatrix extends ShapeRegion {
       .attr('width', this.size.width + 2)
       .attr('height', this.size.height + 2)
 
-    // Build the hover component and place it to the right of the graph
-    let hoverG = this.g.append('g').attr('transform', 'translate(' + (this.size.width + 10) + ',' + (this.size.height / 2) + ')')
-    this._hoverText = new HoverText(hoverG)
+    if (!embedded) {
+      // Build the hover component and place it to the right of the graph
+      let hoverG = this.g.append('g').attr('transform', 'translate(' + (this.size.width + 20) + ',' + (this.size.height / 2) + ')')
+      this._hoverText = new HoverText(hoverG)
+
+      let scaleG = this.g.append('g').attr('transform', 'translate(' + (this.size.width + 5) + ',0)')
+      this.scale = new PredictionMatrixScale(scaleG, this.size.height)
+    }
 
     // Remove paddin gand clear axes
     this._boundingPadding = new Rectangle(0, 0, 0, 0)
-    this._xAxis.removeTicks()
-    this._xAxis.removeLine()
-    this._xAxis.gText.text('Steering').attr('y', 15)
-    this._yAxis.removeTicks()
-    this._yAxis.removeLine()
-    this._yAxis.gText.text('Throttle').attr('y', -10)
+    if (!embedded) {
+      this._xAxis.removeTicks()
+      this._xAxis.removeLine()
+      this._xAxis.gText.text('Steering').attr('y', 15)
+      this._yAxis.removeTicks()
+      this._yAxis.removeLine()
+      this._yAxis.gText.text('Throttle').attr('y', -10)
+    } else {
+      this.g.selectAll('.axis').remove()
+    }
 
     // Determine bands and bandwidth for each cell
     let xDomain = d3.scaleLinear()
@@ -1683,22 +1913,35 @@ class PredictionMatrix extends ShapeRegion {
       let yVal = yDomain(Math.floor(idx / STEER_ACTIONS))
 
       // Square
-      let box = this.addBox(new Rectangle(xVal, yVal + yBandwidth, xVal + xBandwidth, yVal))
+      let box = this.addBox(new Rectangle(
+        Math.floor(xVal),
+        Math.ceil(yVal + yBandwidth),
+        Math.ceil(xVal + xBandwidth),
+        Math.floor(yVal)
+      ))
       box.g.attr('stroke', 'clear')
-        .on('mouseover', (d: any) => {
-          if (d != null) {
-            this.hoverDisplay(d[0], d[1])
-          }
-        })
-        .on('mouseout', (v: any) => { this.stopHover() })
-        .on('mousedown', () => {
-          this._monoColors = false
-          this._updateColors()
-        })
-        .on('mouseup', () => {
-          this._monoColors = true
-          this._updateColors()
-        })
+      if (!embedded) {
+        box.g
+          .on('mouseover', (d: any) => {
+            if (d != null) {
+              this.hoverDisplay(d[0], d[1])
+            }
+            updateRunLineGradient(idx)
+            REWARDS_GRAPH.runLine().g.style('stroke', 'url(#runLineGradient)')
+          })
+          .on('mouseout', (v: any) => {
+            this.stopHover()
+            REWARDS_GRAPH.runLine().g.style('stroke', '')
+          })
+          .on('mousedown', () => {
+            this._monoColors = false
+            this._updateColors()
+          })
+          .on('mouseup', () => {
+            this._monoColors = true
+            this._updateColors()
+          })
+      }
       this.squares.push(box)
     }
   }
@@ -1708,7 +1951,15 @@ class PredictionMatrix extends ShapeRegion {
     this.prediction = prediction
     this.sample = sample
     this._updateColors()
-    this._header.text('Sample: ' + sample.name)
+    if (this._header) {
+      this._header.text(sample.name)
+    }
+    if (this.scale) {
+      this.scale.scale(
+        prediction.data.reduce(reduceMin, undefined),
+        prediction.data.reduce(reduceMax, undefined)
+      )
+    }
   }
 
   // Applies colors to the grid depending on mode (prediction or label)
@@ -1737,18 +1988,108 @@ class PredictionMatrix extends ShapeRegion {
   }
 
   private hoverDisplay(index: number, value: number) {
-    value = Math.round(value * 1000) / 10
-    let throttle = THROTTLE_VALUES[Math.floor(index / STEER_ACTIONS)]
-    let steering = STEERING_VALUES[index % STEER_ACTIONS]
-    this._hoverText.show(value, throttle, steering)
+    if (this._hoverText) {
+      value = Math.round(value * 1000) / 10
+      let throttle = THROTTLE_VALUES[Math.floor(index / STEER_ACTIONS)]
+      let steering = STEERING_VALUES[index % STEER_ACTIONS]
+      this._hoverText.show(value, throttle, steering)
+    }
   }
 
   private stopHover() {
-    this._hoverText.hide()
+    if (this._hoverText) {
+      this._hoverText.hide()
+    }
   }
 
 }
 
+
+// =============================================
+// =============================================
+// =============================================
+// =========== GRADIENTS ===========================
+// =============================================
+// =============================================
+// =============================================
+
+
+function _build_pred_matrix_scale_defs() {
+  let gradient = d3.select('#defs')
+      .append('linearGradient')
+      .attr('id', 'predMatrixGradient')
+      .attr('x1', '0%')
+      .attr('y1', '100%')
+      .attr('x2', '0%')
+      .attr('y2', '0%')
+      .attr('spreadMethod', 'pad')
+
+    linspace(0, 100, 10)
+      .map(d => Math.round(d))
+      .forEach(function(pct, idx) {
+        let color = d3.interpolateBlues(pct / 100.0)
+        gradient.append('stop')
+          .attr('offset', pct + '%')
+          .attr('stop-color', color)
+          .attr('stop-opacity', 1);
+      });
+}
+_build_pred_matrix_scale_defs()
+
+
+function _build_spectrogram_scale_defs() {
+  let gradient = d3.select('#defs')
+      .append('linearGradient')
+      .attr('id', 'spectrogramGradient')
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '100%')
+      .attr('y2', '0%')
+      .attr('spreadMethod', 'pad')
+
+    linspace(0, 100, 10)
+      .map(d => Math.round(d))
+      .forEach(function(pct, idx) {
+        let color = d3.interpolateRdYlGn(pct / 100.0)
+        gradient.append('stop')
+          .attr('offset', pct + '%')
+          .attr('stop-color', color)
+          .attr('stop-opacity', 1);
+      });
+}
+_build_spectrogram_scale_defs()
+
+
+function updateRunLineGradient(actionIndex: number) {
+  // Remove all children
+  d3.select('#runLineGradient').selectAll('stop').remove()
+
+  // Determine all of the predictions and the prediction range
+  let sampleData = STORED_DATA.map[SELECTED_SAMPLE]
+  let predsForRun = sampleData.runs[sampleData.runs.length - 1]
+  let predictionValues = predsForRun.predictions.map(preds => preds.dataNormalized[actionIndex])
+  predictionValues.forEach((point, stepIndex) => {
+    let pct = stepIndex / predictionValues.length * 100
+    let color = d3.interpolateBlues(point)
+    RUNLINE_GRADIENT.append('stop')
+      .attr('offset', pct + '%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 1);
+  })
+}
+
+var RUNLINE_GRADIENT
+function _build_run_line_gradient() {
+  RUNLINE_GRADIENT = d3.select('#defs')
+    .append('linearGradient')
+    .attr('id', 'runLineGradient')
+    .attr('x1', '0%')
+    .attr('x2', '100%')
+    .attr('y1', '0%')
+    .attr('y2', '0%')
+    .attr('spreadMethod', 'pad')
+}
+_build_run_line_gradient()
 
 // =============================================
 // =============================================
@@ -1770,8 +2111,8 @@ let UPDATE_ON: boolean = false
 
 // Build the components first
 let REWARDS_GRAPH = new RewardsGraph()
-let SPECTROGRAMS = new SpectrogramsArea()
-let PREDICTIONS = new PredictionMatrix()
+let SPECTROGRAMS = new SpectrogramsArea(d3.select('#spectrograms'))
+let MAIN_PREDICTIONS = new PredictionMatrix(d3.select('#predictions'))
 let STORED_DATA: SampleDataRepo
 let EVENTS: EpisodeEvent[] = []
 
@@ -1822,7 +2163,7 @@ function setSelectedStep(step: number = -1, manual: boolean = true) {
   SELECTED_STEPS = [step]
   updateSelections()
 
-  document.getElementById('step').value = ''
+  setEventInputValue('step', '')
 }
 
 function setSelectionRange(step_0: number = -1, step_1: number = -1) {
@@ -1837,7 +2178,7 @@ function setSelectionRange(step_0: number = -1, step_1: number = -1) {
   SELECTED_STEPS = [step_0, step_1]
   updateSelections()
 
-  document.getElementById('step').value = ''
+  setEventInputValue('step', '')
 }
 
 function updateSelections() {
@@ -1859,6 +2200,7 @@ function updateSelections() {
   else {
     applyRangeSelection(runPredictions, sample)
   }
+  SPECTROGRAMS.updatePredictions()
 }
 
 function applySingleSelection(runPredictions: PredictionsForRun, sample: Sample) {
@@ -1867,9 +2209,7 @@ function applySingleSelection(runPredictions: PredictionsForRun, sample: Sample)
 
   // Select predictions
   if (runPredictions != null) {
-    let step = Math.floor(SELECTED_STEPS[0] / DATA_COMPRESSION_PREDICTIONS)
-    let prediction = runPredictions.predictionForStep(step)
-    PREDICTIONS.data(prediction, sample)
+    MAIN_PREDICTIONS.data(determineCurrentPrediction(runPredictions), sample)
   }
 }
 
@@ -1878,17 +2218,9 @@ function applyRangeSelection(runPredictions: PredictionsForRun, sample: Sample) 
   REWARDS_GRAPH.selectStepRange(SELECTED_STEPS)
 
   // Prediction range
-  let predictions = runPredictions.predictionsForRange(
-    SELECTED_STEPS.map(it =>
-      Math.floor(it / DATA_COMPRESSION_PREDICTIONS))
-  )
-  if (predictions.length > 0) {
-    let avgPrediction = new Prediction(
-      normalizeNumberArrays(predictions.map(it => it.data)),
-      normalizeNumberArrays(predictions.map(it => it.dataNormalized)),
-      predictions.reduce((prev, curr) => prev + curr.correctness, 0) / predictions.length
-    )
-    PREDICTIONS.data(avgPrediction, sample)
+  let predictions = determineAveragePrediction(runPredictions, sample)
+  if (predictions) {
+    MAIN_PREDICTIONS.data(predictions, sample)
   }
 }
 
@@ -1929,20 +2261,29 @@ function setUpdatesEnabled(enabled: boolean) {
   }
 }
 
+function eventInputValue(name: string) {
+  let item = document.getElementById(name) as HTMLInputElement
+  return parseFloat(item.value)
+}
+function setEventInputValue(name: string, value: number|string) {
+  let item = document.getElementById(name) as HTMLInputElement
+  item.value = String(value)
+}
+
 function generateEventMetadata(step: number) {
   return new EventMetadata(
-    parseFloat(document.getElementById("learning-rate").value),
-    parseFloat(document.getElementById("exploration-rate").value),
-    parseFloat(document.getElementById("reward-shift").value),
+    eventInputValue("learning-rate"),
+    eventInputValue("exploration-rate"),
+    eventInputValue("reward-shift"),
     step
   );
 }
 
 function reversePopulateEventMetadata(metadata: EventMetadata) {
-  document.getElementById('learning-rate').value = metadata.learningRate
-  document.getElementById('exploration-rate').value = metadata.explorationRate
-  document.getElementById('reward-shift').value = metadata.rewardShift
-  document.getElementById('step').value = metadata.step
+  setEventInputValue('learning-rate', metadata.learningRate)
+  setEventInputValue('exploration-rate', metadata.explorationRate)
+  setEventInputValue('reward-shift', metadata.rewardShift)
+  setEventInputValue('step', metadata.step)
 }
 
 function createEvent(step: number, name: string = null, metadata: EventMetadata = null) {

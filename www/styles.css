@@ -25,6 +25,10 @@ svg text::selection {
     background: none;
 }
 
+.runLine {
+  stroke: red;
+}
+
 .event .eventFlag {
   fill: #2f2f2f;
 }
@@ -67,6 +71,16 @@ svg text::selection {
 .spectrogramBackground.selected {
   stroke: black;
   stroke-width: 6;
+}
+
+.spectrogramScaleText {
+  font-size: 10px;
+  fill: #797979;
+}
+
+.predMatrixScaleText {
+  font-size: 10px;
+  fill: #797979;
 }
 
 #event-panel {
