@@ -10,7 +10,7 @@ from http.server import HTTPServer
 from http.server import BaseHTTPRequestHandler
 
 from vaml.data.feed_data import feed_folder
-from vaml.data_utils import load_run_field, load_metrics
+from vaml.data_utils import load_run_field, load_metrics, load_predictions
 
 SERVER = None
 FOLDER = '../thesis_data'
@@ -143,6 +143,19 @@ class VamlHandler(BaseHTTPRequestHandler):
             converter=bytes_utf8_converter
         )
 
+    def _get_predictions(self, parameters):
+        # Load the data
+        data = load_predictions(
+            folder=FOLDER,
+            run_id=parameters['run'],
+            sample=parameters['sample']
+        )
+        self._send_simple(
+            content_type='application/json',
+            content=json.dumps(data),
+            converter=bytes_utf8_converter
+        )
+
     def _get_episode_data(self, parameters):
         # Returns the data about a specific episode
         self._forward_file(
@@ -178,6 +191,7 @@ class VamlHandler(BaseHTTPRequestHandler):
             '/data/run': self._get_run_metadata,
             '/data/run_field': self._get_run_field,
             '/data/episode': self._get_episode_data,
+            '/data/predictions': self._get_predictions,
             '/data/reset': self._reset_thread,
         }
 

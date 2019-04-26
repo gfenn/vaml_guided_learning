@@ -91,6 +91,14 @@ class DataFeeder:
                 break
 
     def feed(self, ep_delay):
+        # Feed validation data first
+        for file in os.listdir(self.src_folder):
+            if file.startswith('predictions_'):
+                copyfile(
+                    src=os.path.join(self.src_folder, file),
+                    dst=os.path.join(self.dst_folder, file)
+                )
+
         # Process all episodes
         for metadata, rewards in self._episode_iterator():
             print("Converting episode " + str(self.episode_id))

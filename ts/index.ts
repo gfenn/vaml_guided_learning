@@ -14,79 +14,78 @@ let NUM_ACTIONS = 40
 let THROTTLE_ACTIONS = 8
 let STEER_ACTIONS = 5
 
-let STEERING_VALUES = [-0.5, -0.1, 0, 0.1, 0.5]
-let THROTTLE_VALUES = [1.0, 0.5, 0.25, 0.1, 0, -0.1, -0.5, -1.0]
+let STEERING_VALUES = [-0.5, -0.25, 0, 0.25, 0.5]
+let THROTTLE_VALUES = [1.0, 0.75, 0.5, 0.25, 0, -0.25, -0.5, -1.0]
 
+// Labels for samples
+let LABELS_STRAIGHT = ([
+  [0, 1, 1, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 1, 1, 0],
+  [0, 1, 1, 1, 0],
+  [0, 0, 1, 0, 0],
+  [0, 0, 0, 0, 0],
+] as any).flat()
+let LABELS_LEFT = ([
+  [1, 1, 0, 0, 0],
+  [2, 1, 1, 0, 0],
+  [2, 2, 1, 0, 0],
+  [2, 1, 1, 0, 0],
+  [1, 1, 0, 0, 0],
+  [1, 1, 0, 0, 0],
+  [1, 0, 0, 0, 0],
+  [1, 0, 0, 0, 0],
+] as any).flat()
+let LABELS_RIGHT = ([
+  [0, 0, 0, 1, 1],
+  [0, 0, 1, 1, 2],
+  [0, 0, 1, 2, 2],
+  [0, 0, 1, 1, 2],
+  [0, 0, 0, 1, 1],
+  [0, 0, 0, 1, 1],
+  [0, 0, 0, 0, 1],
+  [0, 0, 0, 0, 1],
+] as any).flat()
+let LABELS_SLOW = ([
+  [0, 1, 2, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 1, 1, 0],
+  [0, 1, 1, 1, 0],
+  [0, 0, 1, 0, 0],
+  [0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0],
+] as any).flat()
+let LABELS_FAST = ([
+  [0, 0, 1, 0, 0],
+  [0, 0, 1, 0, 0],
+  [0, 0, 1, 0, 0],
+  [0, 1, 1, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 1, 1, 0],
+] as any).flat()
+let LABELS_INTERSECTION = ([
+  [0, 0, 1, 0, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 2, 1, 0],
+  [0, 1, 1, 1, 0],
+  [0, 0, 1, 0, 0],
+  [0, 0, 1, 0, 0],
+] as any).flat()
 
-// Mock Data
-let PREDICTION_MAP_STRAIGHT = ([
-  [0.01, 0.05, 0.10, 0.05, 0.01],
-  [0.05, 0.10, 0.50, 0.10, 0.05],
-  [0.10, 0.40, 0.80, 0.40, 0.10],
-  [0.20, 0.60, 1.00, 0.60, 0.20],
-  [0.10, 0.40, 0.80, 0.40, 0.10],
-  [0.05, 0.20, 0.50, 0.20, 0.05],
-  [0.03, 0.10, 0.20, 0.10, 0.03],
-  [0.01, 0.05, 0.10, 0.05, 0.01],
-] as any).flat()
-let PREDICTION_MAP_LEFT = ([
-  [0.08, 0.05, 0.03, 0.01, 0.00],
-  [0.10, 0.08, 0.05, 0.03, 0.01],
-  [0.50, 0.30, 0.10, 0.05, 0.01],
-  [0.80, 0.50, 0.30, 0.10, 0.05],
-  [1.00, 0.90, 0.50, 0.30, 0.10],
-  [0.80, 0.50, 0.30, 0.10, 0.05],
-  [0.50, 0.30, 0.10, 0.05, 0.01],
-  [0.10, 0.08, 0.05, 0.03, 0.01],
-] as any).flat()
-let PREDICTION_MAP_RIGHT = ([
-  [0.01, 0.03, 0.05, 0.08, 0.10],
-  [0.01, 0.05, 0.10, 0.30, 0.50],
-  [0.05, 0.10, 0.30, 0.50, 0.80],
-  [0.10, 0.30, 0.50, 0.90, 1.00],
-  [0.05, 0.10, 0.30, 0.50, 0.80],
-  [0.01, 0.05, 0.10, 0.30, 0.50],
-  [0.01, 0.03, 0.05, 0.08, 0.10],
-  [0.00, 0.01, 0.03, 0.05, 0.08],
-] as any).flat()
-let PREDICTION_MAP_SLOW_LEFT = ([
-  [0.10, 0.50, 0.10, 0.05, 0.05],
-  [0.40, 0.80, 0.40, 0.10, 0.10],
-  [0.60, 1.00, 0.60, 0.20, 0.20],
-  [0.40, 0.80, 0.40, 0.10, 0.10],
-  [0.20, 0.50, 0.20, 0.05, 0.05],
-  [0.10, 0.20, 0.10, 0.03, 0.03],
-  [0.05, 0.10, 0.05, 0.01, 0.01],
-  [0.05, 0.10, 0.05, 0.01, 0.01],
-] as any).flat()
-let PREDICTION_MAP_SLOW_RIGHT = ([
-  [0.05, 0.05, 0.10, 0.50, 0.10],
-  [0.10, 0.10, 0.40, 0.80, 0.40],
-  [0.20, 0.20, 0.60, 1.00, 0.60],
-  [0.10, 0.10, 0.40, 0.80, 0.40],
-  [0.05, 0.05, 0.20, 0.50, 0.20],
-  [0.03, 0.03, 0.10, 0.20, 0.10],
-  [0.01, 0.01, 0.05, 0.10, 0.05],
-  [0.01, 0.01, 0.05, 0.10, 0.05],
-] as any).flat()
-let PREDICTION_MAP_BRAKE = ([
-  [0.01, 0.05, 0.10, 0.05, 0.01],
-  [0.01, 0.05, 0.10, 0.05, 0.01],
-  [0.03, 0.10, 0.20, 0.10, 0.03],
-  [0.05, 0.10, 0.50, 0.10, 0.05],
-  [0.05, 0.20, 0.50, 0.20, 0.05],
-  [0.10, 0.40, 0.80, 0.40, 0.10],
-  [0.10, 0.40, 0.80, 0.40, 0.10],
-  [0.20, 0.60, 1.00, 0.60, 0.20],
-] as any).flat()
-
-let PREDICTION_MOCK_DATA = {
-  'Straight': PREDICTION_MAP_STRAIGHT,
-  'Left': PREDICTION_MAP_LEFT,
-  'Right': PREDICTION_MAP_RIGHT,
-  'Slow Left': PREDICTION_MAP_SLOW_LEFT,
-  'Slow Right': PREDICTION_MAP_SLOW_RIGHT,
-  'Slam Brakes': PREDICTION_MAP_BRAKE,
+let SAMPLE_LABELS = {
+  'Straight': LABELS_STRAIGHT,
+  'Left': LABELS_LEFT,
+  'Right': LABELS_RIGHT,
+  'Slow': LABELS_SLOW,
+  'Fast': LABELS_FAST,
+  'Intersection': LABELS_INTERSECTION,
 }
 
 
@@ -133,34 +132,24 @@ function normalizeValues(values: number[]) {
   return values
 }
 
-// Generates pseudo-random data to populate the action predictions, including
-// applying softmax on the data.
-function generateMockPredictionData(sample: string = 'Straight', accuracy: number = 0.8): number[] {
-  // Apply accuracy randomness
-  let mock = PREDICTION_MOCK_DATA[sample]
-    .map(v => {
-      if (Math.random() > accuracy) {
-        return Math.random() * 2 - 1 + v
-      }
-      return v
-    })
-    .map(v => Math.pow(Math.max(v, 0), 1 + Math.abs(accuracy)))
-
-  // Determine softmax
-  let total = mock.reduce((p, value) => p + Math.exp(value), 0)
-  let softmax = mock.map(v => Math.exp(v) / total)
-  return softmax
-}
-
-// Generates mock labels, assigning 0 (bad), 1 (neutral) or 2 (good) to each action index.
-function generateMockPredictionLabels(sample: string = 'Straight'): number[] {
-  return PREDICTION_MOCK_DATA[sample]
-    .map(v => {
-      if (v <= 0.2) return 0;
-      if (v <= 0.6) return 1;
-      return 2;
-    })
-}
+// // Generates pseudo-random data to populate the action predictions, including
+// // applying softmax on the data.
+// function generateMockPredictionData(sample: string = 'Straight', accuracy: number = 0.8): number[] {
+//   // Apply accuracy randomness
+//   let mock = PREDICTION_MOCK_DATA[sample]
+//     .map(v => {
+//       if (Math.random() > accuracy) {
+//         return Math.random() * 2 - 1 + v
+//       }
+//       return v
+//     })
+//     .map(v => Math.pow(Math.max(v, 0), 1 + Math.abs(accuracy)))
+//
+//   // Determine softmax
+//   let total = mock.reduce((p, value) => p + Math.exp(value), 0)
+//   let softmax = mock.map(v => Math.exp(v) / total)
+//   return softmax
+// }
 
 // Rounds the value to the given number of significant figures.
 function roundToSigFigures(value: number, figures: number): number {
@@ -302,18 +291,17 @@ class Prediction {
   // correctness value (0 to 1)
   correctness: number
 
-  static build(data: number[], correctness: number, labels: number[]) {
+  static build(data: number[], labels: number[]) {
     // let max = data.reduce((p, v) => v > p ? v : p, data[0])
     // this.dataNormalized = data.map(v => v / max)
     let dataNormalized = normalizeValues(data)
 
     // // Measure the correctness
-    // TODO - when no longer using mock data, determine correctness score
-    // let score = data.map((probability, index) => {
-    //   // Label is 0 (wrong = 0 points), 1 (neutral = 0.5 points), or 2 (good = 1 point)
-    //   return probability * (labels[index] / 2)
-    // })
-    // correctness = score.reduce((p, c) => p + c, 0)
+    let score = data.map((probability, index) => {
+      // Label is 0 (wrong = 0 points), 1 (neutral = 0.5 points), or 2 (good = 1 point)
+      return probability * (labels[index] / 2)
+    })
+    let correctness = score.reduce((p, c) => p + c, 0)
     return new Prediction(data, dataNormalized, correctness)
   }
 
@@ -328,14 +316,14 @@ class Prediction {
 class Sample {
   name: string
   labels: number[]
-  constructor(name: string, labels: number[] = generateMockPredictionLabels()) {
+  constructor(name: string, labels: number[]) {
     this.name = name
     this.labels = labels
   }
 }
 
-let SAMPLES = Object.keys(PREDICTION_MOCK_DATA)
-  .map(name => new Sample(name, generateMockPredictionLabels(name)))
+let SAMPLES = Object.keys(SAMPLE_LABELS)
+  .map(name => new Sample(name, SAMPLE_LABELS[name]))
   .reduce((map, sample) => {
     map[sample.name] = sample
     return map
@@ -498,16 +486,22 @@ class DataCollector {
     compression: number
   ): Promise<PredictionsForRun> {
     // TODO - SINCE THIS IS MOCK
-    return this.getRunField(run_id, compression, 'rewards')
-      .then(data => {
-        let values = normalizeValues(data.points.map(p => p.y))
-        let steps = values.map(v => {
-          let mockData: number[] = generateMockPredictionData(sample.name, v + 0.1)
-          return Prediction.build(mockData, v, sample.labels)
+    run_id = 6
+    return fetch('data/predictions?run=' + run_id + '&sample=' + sample.name.toLowerCase())
+        .then(response => response.json() )
+        .then(data => {
+          let steps = data.map(preds => {
+            let new_preds = new Array(40).fill(0)
+            for (let idx = 0; idx < 40; idx++) {
+              let col = idx % 5
+              let row = 7 - (Math.floor(idx / 5))
+              let new_idx = col + row * 5
+              new_preds[new_idx] = preds[idx]
+            }
+            return Prediction.build(new_preds, sample.labels)
+          })
+          return new PredictionsForRun(sample, run_id, steps)
         })
-
-        return new PredictionsForRun(sample, run_id, steps)
-      })
   }
 
   // Returns predictions for all runs.

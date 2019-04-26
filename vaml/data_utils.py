@@ -2,6 +2,7 @@ import json
 import os
 import numpy as np
 
+
 # Loads the 25, 50, and 75 percentile data for rewards across all runs.
 # Then applies compression to keep data size down.
 def load_metrics(folder, compression):
@@ -13,6 +14,7 @@ def load_metrics(folder, compression):
     }
     return percentiles
 
+
 # Loads all of the specified field values within a given run.
 def load_run_field(folder, run_id, field, compression):
     # Read files
@@ -22,6 +24,14 @@ def load_run_field(folder, run_id, field, compression):
     compressed = compress_array(reward_data, compression)
     return compressed.tolist()
 
+
+# Loads all of the predictions being made against the sample
+def load_predictions(folder, run_id, sample):
+    return np.load('{folder}/run_{run}/predictions_{sample}.npy'.format(
+        folder=folder,
+        run=run_id,
+        sample=sample
+    )).tolist()
 
 
 # Compresses the size of a number array by bucketizing values across their mean.
