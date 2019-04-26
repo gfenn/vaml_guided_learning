@@ -31,7 +31,7 @@ def load_predictions(folder, run_id, sample):
         folder=folder,
         run=run_id,
         sample=sample
-    ))
+    )).tolist()
 
 
 # Compresses the size of a number array by bucketizing values across their mean.
