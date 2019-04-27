@@ -2118,7 +2118,6 @@ REWARDS_GRAPH.loadCurveBoxplotData()
   .then(() => {
     createEvent(0, 'Start', new EventMetadata(0.0001, 0.3, 0.01, 0))
     createEvent(1000000, 'Phase 2', new EventMetadata(0.00001, 0.1, 0.001, 1000000))
-    createEvent(2000000, 'Phase 3', new EventMetadata(0.000001, 0.05, 0, 2000000))
     REWARDS_GRAPH.deselectEvents()
   })
 
